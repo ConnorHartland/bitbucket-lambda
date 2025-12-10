@@ -1,0 +1,4 @@
+# file: /Users/connorhartland/code/teams-lambda/lambda/lambda_function.py
+# hypothesis_version: 6.141.1
+
+[200, 400, 401, 500, 'BITBUCKET_SECRET_ARN', 'Configuration', 'EVENT_FILTER', 'FILTER_MODE', 'Invalid JSON payload', 'Invalid signature', 'Unauthorized', 'X-Event-Key', 'X-Hub-Signature', 'all', 'body', 'error', 'event_type', 'headers', 'message', 'placeholder_secret', 'request_id', 'sha256=', 'statusCode', 'unknown', 'utf-8', 'x-event-key', 'x-hub-signature', '{}']

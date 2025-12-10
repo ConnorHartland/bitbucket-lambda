@@ -1,0 +1,155 @@
+image: python:3.11
+
+definitions:
+  caches:
+    terraform: ~/.terraform.d/plugin-cache
+    pip: ~/.cache/pip
+  
+  services:
+    docker:
+      memory: 2048
+
+  steps:
+    - step: &validate
+        name: Validate Terraform Configuration
+        image: hashicorp/terraform:1.6
+        caches:
+          - terraform
+        script:
+          # Install tflint
+          - wget -O- https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          # Format check
+          - terraform fmt -check -recursive
+          # Initialize Terraform
+          - terraform init -backend=false
+          # Validate configuration
+          - terraform validate
+          # Run tflint
+          - tflint --init
+          - tflint
+        artifacts:
+          - .terraform/**
+    
+    - step: &test
+        name: Run Tests with Coverage
+        image: python:3.11
+        caches:
+          - pip
+        script:
+          # Install test dependencies
+          - pip install -r requirements-test.txt
+          # Install pytest-cov for coverage
+          - pip install pytest-cov
+          # Run tests with coverage
+          - pytest tests/ --cov=lambda --cov-report=term-missing --cov-report=xml --cov-fail-under=80 -v
+          # Generate coverage report
+          - python -m coverage report
+        artifacts:
+          - coverage.xml
+          - .coverage
+    
+    - step: &plan
+        name: Terraform Plan
+        image: hashicorp/terraform:1.6
+        caches:
+          - terraform
+        script:
+          # Initialize Terraform with backend
+          - terraform init
+          # Create Terraform plan
+          - terraform plan -out=tfplan -var-file="terraform.tfvars" -detailed-exitcode
+          # Show plan in readable format
+          - terraform show -no-color tfplan > plan_output.txt
+          # Display plan summary
+          - echo "=== Terraform Plan Summary ==="
+          - cat plan_output.txt
+        artifacts:
+          - tfplan
+          - plan_output.txt
+          - .terraform/**
+    
+    - step: &apply
+        name: Apply Terraform Changes
+        image: hashicorp/terraform:1.6
+        trigger: manual
+        caches:
+          - terraform
+        script:
+          # Initialize Terraform
+          - terraform init
+          # Apply the plan
+          - terraform apply -auto-approve tfplan
+          # Show outputs
+          - terraform output -json > terraform_outputs.json
+          - echo "=== Deployment Outputs ==="
+          - terraform output
+        artifacts:
+          - terraform_outputs.json
+    
+    - step: &package-lambda
+        name: Package and Deploy Lambda
+        image: python:3.11
+        script:
+          # Install AWS CLI
+          - pip install awscli
+          # Create deployment package
+          - cd lambda
+          - zip -r ../lambda_function.zip .
+          - cd ..
+          # Update Lambda function code
+          - aws lambda update-function-code --function-name bitbucket-teams-notifier --zip-file fileb://lambda_function.zip --region $AWS_DEFAULT_REGION
+          # Wait for update to complete
+          - aws lambda wait function-updated --function-name bitbucket-teams-notifier --region $AWS_DEFAULT_REGION
+          # Get function info
+          - aws lambda get-function --function-name bitbucket-teams-notifier --region $AWS_DEFAULT_REGION
+        artifacts:
+          - lambda_function.zip
+
+pipelines:
+  default:
+    - step: *validate
+    - step: *test
+  
+  branches:
+    main:
+      - step: *validate
+      - step: *test
+      - step: *plan
+      - step: 
+          <<: *apply
+          deployment: production
+      - step: *package-lambda
+    
+    develop:
+      - step: *validate
+      - step: *test
+      - step:
+          <<: *plan
+          name: Terraform Plan (Development)
+      - step:
+          <<: *apply
+          name: Apply Terraform Changes (Development)
+          deployment: development
+      - step: *package-lambda
+  
+  pull-requests:
+    '**':
+      - step: *validate
+      - step: *test
+      - step:
+          <<: *plan
+          name: Terraform Plan (PR Validation)
+
+  tags:
+    'v*':
+      - step: *validate
+      - step: *test
+      - step: *plan
+      - step:
+          <<: *apply
+          deployment: production
+      - step: *package-lambda
+
+options:
+  max-time: 30
+  size: 2x

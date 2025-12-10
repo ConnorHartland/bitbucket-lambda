@@ -1,0 +1,260 @@
+name: Deploy Bitbucket Teams Webhook
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  TF_VERSION: '1.6'
+  PYTHON_VERSION: '3.11'
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  validate:
+    name: Validate Terraform Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Initialize TFLint
+        run: tflint --init
+
+      - name: Run TFLint
+        run: tflint
+
+  test:
+    name: Run Tests with Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-test.txt
+          pip install pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=lambda \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=80 \
+            -v
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: [validate, test]
+    if: github.event_name != 'pull_request'
+    environment: 
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    outputs:
+      tfplan-exists: ${{ steps.plan.outputs.tfplan-exists }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Create terraform.tfvars
+        run: |
+          cat > terraform.tfvars << EOF
+          aws_region = "${{ env.AWS_REGION }}"
+          environment = "${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}"
+          teams_webhook_url = "${{ secrets.TEAMS_WEBHOOK_URL }}"
+          bitbucket_webhook_secret = "${{ secrets.BITBUCKET_WEBHOOK_SECRET }}"
+          event_filter = "${{ vars.EVENT_FILTER || 'pullrequest:created,pullrequest:fulfilled,pullrequest:rejected,repo:push,pullrequest:comment_created,repo:commit_status_updated' }}"
+          filter_mode = "${{ vars.FILTER_MODE || 'all' }}"
+          lambda_timeout = ${{ vars.LAMBDA_TIMEOUT || 30 }}
+          lambda_memory_size = ${{ vars.LAMBDA_MEMORY_SIZE || 256 }}
+          log_retention_days = ${{ vars.LOG_RETENTION_DAYS || 7 }}
+          EOF
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -out=tfplan -var-file="terraform.tfvars" -detailed-exitcode
+          echo "tfplan-exists=true" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Display Plan
+        if: steps.plan.outputs.tfplan-exists == 'true'
+        run: |
+          echo "### Terraform Plan Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          terraform show -no-color tfplan >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload plan artifact
+        if: steps.plan.outputs.tfplan-exists == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan-${{ github.sha }}
+          path: |
+            tfplan
+            .terraform/
+          retention-days: 5
+
+  apply:
+    name: Apply Terraform Changes
+    runs-on: ubuntu-latest
+    needs: [plan]
+    if: needs.plan.outputs.tfplan-exists == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+    environment: 
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      url: ${{ steps.deploy.outputs.webhook-url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan-${{ github.sha }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Create terraform.tfvars
+        run: |
+          cat > terraform.tfvars << EOF
+          aws_region = "${{ env.AWS_REGION }}"
+          environment = "${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}"
+          teams_webhook_url = "${{ secrets.TEAMS_WEBHOOK_URL }}"
+          bitbucket_webhook_secret = "${{ secrets.BITBUCKET_WEBHOOK_SECRET }}"
+          event_filter = "${{ vars.EVENT_FILTER || 'pullrequest:created,pullrequest:fulfilled,pullrequest:rejected,repo:push,pullrequest:comment_created,repo:commit_status_updated' }}"
+          filter_mode = "${{ vars.FILTER_MODE || 'all' }}"
+          lambda_timeout = ${{ vars.LAMBDA_TIMEOUT || 30 }}
+          lambda_memory_size = ${{ vars.LAMBDA_MEMORY_SIZE || 256 }}
+          log_retention_days = ${{ vars.LOG_RETENTION_DAYS || 7 }}
+          EOF
+
+      - name: Terraform Apply
+        id: deploy
+        run: |
+          terraform apply -auto-approve tfplan
+          echo "webhook-url=$(terraform output -raw webhook_url)" >> $GITHUB_OUTPUT
+
+      - name: Display Outputs
+        run: |
+          echo "### Deployment Outputs" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          terraform output >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  deploy-lambda:
+    name: Package and Deploy Lambda
+    runs-on: ubuntu-latest
+    needs: [apply]
+    if: always() && needs.apply.result == 'success'
+    environment: 
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package Lambda function
+        run: |
+          cd lambda
+          zip -r ../lambda_function.zip .
+          cd ..
+
+      - name: Deploy Lambda function
+        run: |
+          FUNCTION_NAME="bitbucket-teams-notifier"
+          
+          # Update function code
+          aws lambda update-function-code \
+            --function-name "$FUNCTION_NAME" \
+            --zip-file fileb://lambda_function.zip \
+            --region "${{ env.AWS_REGION }}"
+          
+          # Wait for update to complete
+          aws lambda wait function-updated \
+            --function-name "$FUNCTION_NAME" \
+            --region "${{ env.AWS_REGION }}"
+          
+          # Get function info
+          aws lambda get-function \
+            --function-name "$FUNCTION_NAME" \
+            --region "${{ env.AWS_REGION }}" \
+            --query 'Configuration.[FunctionName,Runtime,LastModified,CodeSize]' \
+            --output table
+
+      - name: Upload Lambda package
+        uses: actions/upload-artifact@v3
+        with:
+          name: lambda-package-${{ github.sha }}
+          path: lambda_function.zip
+          retention-days: 30

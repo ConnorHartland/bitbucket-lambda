@@ -1,0 +1,36 @@
+aws_region                = "us-east-1"
+environment               = "prod"
+teams_webhook_url         = "https://your-org.webhook.office.com/webhookb2/..."
+bitbucket_webhook_secret  = "your-random-secret-string-here"
+
+# Secret management configuration
+secret_recovery_window_days = 7
+enable_secret_rotation      = false
+rotation_days              = 90
+
+# Event filtering configuration
+event_filter = "pullrequest:created,pullrequest:fulfilled,pullrequest:rejected,repo:push,pullrequest:comment_created,repo:commit_status_updated"
+filter_mode  = "all"
+
+# Lambda configuration
+lambda_timeout     = 30
+lambda_memory_size = 256
+
+# Logging configuration
+log_retention_days = 7
+
+# API Gateway configuration
+api_stage_name = "prod"
+
+# Monitoring and alerting configuration
+enable_monitoring_alarms = true
+alarm_email_endpoints    = ["devops@yourcompany.com", "alerts@yourcompany.com"]
+
+# Alarm thresholds (optional - defaults will be used if not specified)
+lambda_error_threshold         = 5
+lambda_error_rate_threshold    = 0.05  # 5%
+lambda_duration_threshold      = 25000 # 25 seconds
+signature_failure_threshold    = 10
+teams_api_failure_threshold    = 5
+api_gateway_4xx_threshold      = 10
+unsupported_events_threshold   = 50
