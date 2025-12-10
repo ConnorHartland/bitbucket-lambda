@@ -1,0 +1,221 @@
+{
+  "type": "AdaptiveCard",
+  "version": "1.4",
+  "body": [
+    {
+      "type": "Container",
+      "style": "emphasis",
+      "items": [
+        {
+          "type": "ColumnSet",
+          "columns": [
+            {
+              "type": "Column",
+              "width": "auto",
+              "items": [
+                {
+                  "type": "Image",
+                  "url": "https://wac-cdn.atlassian.com/dam/jcr:e2a6f06f-b3d5-4002-aed3-73539c56a2eb/bitbucket_rgb_blue.png",
+                  "size": "Small",
+                  "style": "Person"
+                }
+              ]
+            },
+            {
+              "type": "Column",
+              "width": "stretch",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "@{triggerBody()?['title']}",
+                  "weight": "Bolder",
+                  "size": "Medium",
+                  "wrap": true,
+                  "color": "@{if(equals(triggerBody()?['theme_color'], '#DC3545'), 'Attention', if(equals(triggerBody()?['theme_color'], '#28A745'), 'Good', if(equals(triggerBody()?['theme_color'], '#FFC107'), 'Warning', 'Accent')))}"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Container",
+      "items": [
+        {
+          "type": "TextBlock",
+          "text": "@{triggerBody()?['subtitle']}",
+          "isSubtle": true,
+          "wrap": true,
+          "spacing": "Small"
+        }
+      ],
+      "$when": "@{not(empty(triggerBody()?['subtitle']))}"
+    },
+    {
+      "type": "Container",
+      "items": [
+        {
+          "type": "FactSet",
+          "facts": [
+            {
+              "title": "Repository",
+              "value": "@{triggerBody()?['repository']}"
+            },
+            {
+              "title": "Event",
+              "value": "@{triggerBody()?['action']}"
+            },
+            {
+              "title": "Author",
+              "value": "@{triggerBody()?['author']}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Container",
+      "items": [
+        {
+          "type": "FactSet",
+          "facts": [
+            {
+              "title": "PR ID",
+              "value": "@{triggerBody()?['pr_id']}"
+            },
+            {
+              "title": "Source → Target",
+              "value": "@{triggerBody()?['branch_flow']}"
+            },
+            {
+              "title": "State",
+              "value": "@{triggerBody()?['state']}"
+            }
+          ]
+        }
+      ],
+      "$when": "@{equals(triggerBody()?['event_category'], 'pull_request')}"
+    },
+    {
+      "type": "Container",
+      "items": [
+        {
+          "type": "FactSet",
+          "facts": [
+            {
+              "title": "Branch",
+              "value": "@{triggerBody()?['branch']}"
+            },
+            {
+              "title": "Commits",
+              "value": "@{triggerBody()?['commit_count']}"
+            }
+          ]
+        },
+        {
+          "type": "Container",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "Recent Commits:",
+              "weight": "Bolder",
+              "size": "Small"
+            },
+            {
+              "type": "TextBlock",
+              "text": "@{triggerBody()?['commit_details']}",
+              "wrap": true,
+              "size": "Small",
+              "spacing": "Small"
+            }
+          ],
+          "$when": "@{not(empty(triggerBody()?['commit_details']))}"
+        }
+      ],
+      "$when": "@{equals(triggerBody()?['event_category'], 'push')}"
+    },
+    {
+      "type": "Container",
+      "items": [
+        {
+          "type": "FactSet",
+          "facts": [
+            {
+              "title": "Context",
+              "value": "@{triggerBody()?['context_title']}"
+            }
+          ]
+        },
+        {
+          "type": "Container",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "Comment:",
+              "weight": "Bolder",
+              "size": "Small"
+            },
+            {
+              "type": "TextBlock",
+              "text": "@{triggerBody()?['description']}",
+              "wrap": true,
+              "size": "Small",
+              "spacing": "Small",
+              "style": "emphasis"
+            }
+          ],
+          "$when": "@{not(empty(triggerBody()?['description']))}"
+        }
+      ],
+      "$when": "@{equals(triggerBody()?['event_category'], 'comment')}"
+    },
+    {
+      "type": "Container",
+      "items": [
+        {
+          "type": "FactSet",
+          "facts": [
+            {
+              "title": "Build",
+              "value": "@{triggerBody()?['build_name']}"
+            },
+            {
+              "title": "Status",
+              "value": "@{triggerBody()?['build_status']}"
+            },
+            {
+              "title": "Commit",
+              "value": "@{triggerBody()?['commit_hash']}"
+            }
+          ]
+        },
+        {
+          "type": "Container",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "@{triggerBody()?['description']}",
+              "wrap": true,
+              "size": "Small",
+              "isSubtle": true
+            }
+          ],
+          "$when": "@{not(empty(triggerBody()?['description']))}"
+        }
+      ],
+      "$when": "@{equals(triggerBody()?['event_category'], 'commit_status')}"
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.OpenUrl",
+      "title": "View in Bitbucket",
+      "url": "@{triggerBody()?['url']}"
+    }
+  ],
+  "msteams": {
+    "width": "Full"
+  },
+  "$when": "@{not(empty(triggerBody()?['url']))}"
+}

@@ -154,7 +154,8 @@ def test_adaptive_card_generation():
     return True
 
 def create_teams_payload(adaptive_card):
-    """Create the full payload that would be sent to Teams"""
+    """Create the full payload that would be sent to Teams Workflows"""
+    # For Teams Workflows, we wrap the Adaptive Card in message attachments
     return {
         "type": "message",
         "attachments": [

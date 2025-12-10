@@ -918,13 +918,13 @@ def create_adaptive_card_data(parsed_event: ParsedEvent) -> Dict[str, Any]:
 
 def format_teams_message(parsed_event: ParsedEvent) -> Dict[str, Any]:
     """
-    Convert ParsedEvent to Teams Adaptive Card JSON.
+    Convert ParsedEvent to data payload for Teams Workflow.
     
     Args:
         parsed_event: The parsed Bitbucket event
     
     Returns:
-        dict: Teams Adaptive Card JSON structure
+        dict: Data payload for Teams Workflow Adaptive Card template
     
     Raises:
         ValueError: If parsed_event is None or has invalid data
@@ -935,195 +935,33 @@ def format_teams_message(parsed_event: ParsedEvent) -> Dict[str, Any]:
     if not parsed_event.repository:
         raise ValueError("ParsedEvent must have a repository")
     
-    # Create the data payload for the Adaptive Card
-    card_data = create_adaptive_card_data(parsed_event)
+    # Create the data payload that the Teams Workflow template will use
+    event_data = create_adaptive_card_data(parsed_event)
     
-    # Get theme color for styling
+    # Add theme color for the template
     theme_color = get_event_color(parsed_event.event_category, parsed_event.action, parsed_event.metadata)
+    event_data["theme_color"] = theme_color
+    event_data["text_color"] = _get_text_color_for_theme(theme_color)
     
-    # Create the Adaptive Card structure
-    adaptive_card = {
-        "type": "AdaptiveCard",
-        "version": "1.4",
-        "body": [
-            {
-                "type": "Container",
-                "style": "emphasis",
-                "items": [
-                    {
-                        "type": "ColumnSet",
-                        "columns": [
-                            {
-                                "type": "Column",
-                                "width": "auto",
-                                "items": [
-                                    {
-                                        "type": "Image",
-                                        "url": "https://wac-cdn.atlassian.com/dam/jcr:e2a6f06f-b3d5-4002-aed3-73539c56a2eb/bitbucket_rgb_blue.png",
-                                        "size": "Small",
-                                        "style": "Person"
-                                    }
-                                ]
-                            },
-                            {
-                                "type": "Column",
-                                "width": "stretch",
-                                "items": [
-                                    {
-                                        "type": "TextBlock",
-                                        "text": card_data["title"],
-                                        "weight": "Bolder",
-                                        "size": "Medium",
-                                        "wrap": True,
-                                        "color": _get_text_color_for_theme(theme_color)
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            },
-            {
-                "type": "Container",
-                "items": [
-                    {
-                        "type": "TextBlock",
-                        "text": card_data.get("subtitle", ""),
-                        "isSubtle": True,
-                        "wrap": True,
-                        "spacing": "Small"
-                    } if card_data.get("subtitle") else None
-                ]
-            }
-        ],
-        "msteams": {
-            "width": "Full"
-        }
-    }
-    
-    # Remove None items from body
-    adaptive_card["body"] = [item for item in adaptive_card["body"] if item is not None]
-    adaptive_card["body"][1]["items"] = [item for item in adaptive_card["body"][1]["items"] if item is not None]
-    
-    # Add event-specific content
-    facts = []
-    facts.extend([
-        {"title": "Repository", "value": card_data["repository"]},
-        {"title": "Event", "value": card_data["action"]},
-        {"title": "Author", "value": card_data["author"]}
-    ])
-    
-    # Add event-specific facts
-    if parsed_event.event_category == 'pull_request':
-        facts.extend([
-            {"title": "PR ID", "value": card_data.get("pr_id", "")},
-            {"title": "Source → Target", "value": f"{card_data.get('source_branch', 'unknown')} → {card_data.get('target_branch', 'unknown')}"},
-            {"title": "State", "value": card_data.get("state", "unknown")}
-        ])
-    
-    elif parsed_event.event_category == 'push':
-        facts.extend([
-            {"title": "Branch", "value": card_data.get("branch", "unknown")},
-            {"title": "Commits", "value": card_data.get("commit_count", "0")}
-        ])
-        
-        # Add commit details
-        commits = card_data.get("commits", [])
+    # Add formatted commit details for push events
+    if parsed_event.event_category == 'push':
+        commits = event_data.get("commits", [])
         if commits:
-            commit_text = []
+            commit_details = []
             for commit in commits[:3]:  # Show max 3 commits
                 commit_msg = commit.get('message', 'No message')[:50]
                 if len(commit.get('message', '')) > 50:
                     commit_msg += '...'
-                commit_text.append(f"• {commit.get('hash', 'unknown')}: {commit_msg}")
-            
-            adaptive_card["body"].append({
-                "type": "Container",
-                "items": [
-                    {
-                        "type": "TextBlock",
-                        "text": "Recent Commits:",
-                        "weight": "Bolder",
-                        "size": "Small"
-                    },
-                    {
-                        "type": "TextBlock",
-                        "text": "\n".join(commit_text),
-                        "wrap": True,
-                        "size": "Small",
-                        "spacing": "Small"
-                    }
-                ]
-            })
+                commit_details.append(f"• {commit.get('hash', 'unknown')}: {commit_msg}")
+            event_data["commit_details"] = "\\n".join(commit_details)
     
-    elif parsed_event.event_category == 'comment':
-        facts.append({"title": "Context", "value": card_data.get("context_title", "unknown")})
-        
-        # Add comment content
-        if card_data.get("description"):
-            adaptive_card["body"].append({
-                "type": "Container",
-                "items": [
-                    {
-                        "type": "TextBlock",
-                        "text": "Comment:",
-                        "weight": "Bolder",
-                        "size": "Small"
-                    },
-                    {
-                        "type": "TextBlock",
-                        "text": card_data["description"],
-                        "wrap": True,
-                        "size": "Small",
-                        "spacing": "Small",
-                        "style": "emphasis"
-                    }
-                ]
-            })
+    # Add branch flow for pull requests
+    if parsed_event.event_category == 'pull_request':
+        source = event_data.get('source_branch', 'unknown')
+        target = event_data.get('target_branch', 'unknown')
+        event_data["branch_flow"] = f"{source} → {target}"
     
-    elif parsed_event.event_category == 'commit_status':
-        facts.extend([
-            {"title": "Build", "value": card_data.get("build_name", "Build")},
-            {"title": "Status", "value": card_data.get("build_status", "unknown")},
-            {"title": "Commit", "value": card_data.get("commit_hash", "unknown")}
-        ])
-        
-        if card_data.get("description"):
-            adaptive_card["body"].append({
-                "type": "Container",
-                "items": [
-                    {
-                        "type": "TextBlock",
-                        "text": card_data["description"],
-                        "wrap": True,
-                        "size": "Small",
-                        "isSubtle": True
-                    }
-                ]
-            })
-    
-    # Add facts section
-    adaptive_card["body"].append({
-        "type": "Container",
-        "items": [
-            {
-                "type": "FactSet",
-                "facts": facts
-            }
-        ]
-    })
-    
-    # Add action button if URL is available
-    if card_data.get("url"):
-        adaptive_card["actions"] = [
-            {
-                "type": "Action.OpenUrl",
-                "title": "View in Bitbucket",
-                "url": card_data["url"]
-            }
-        ]
-    
-    return adaptive_card
+    return event_data
 
 
 def _get_text_color_for_theme(theme_color: str) -> str:
@@ -1150,19 +988,19 @@ def _get_text_color_for_theme(theme_color: str) -> str:
 
 
 # Teams posting module
-def post_to_teams(adaptive_card: Dict[str, Any], webhook_url: str) -> bool:
+def post_to_teams(event_data: Dict[str, Any], webhook_url: str) -> bool:
     """
-    Post Adaptive Card to Microsoft Teams via Power Automate workflow.
+    Post event data to Microsoft Teams Workflow.
     
     Args:
-        adaptive_card: Teams Adaptive Card JSON structure
-        webhook_url: Teams Power Automate workflow URL
+        event_data: Parsed event data for Teams Workflow template
+        webhook_url: Teams Workflow webhook URL
     
     Returns:
         bool: True if posting succeeded, False otherwise
     """
-    if not adaptive_card:
-        logger.error("Cannot post empty adaptive card to Teams")
+    if not event_data:
+        logger.error("Cannot post empty event data to Teams")
         return False
     
     if not webhook_url:
@@ -1170,17 +1008,9 @@ def post_to_teams(adaptive_card: Dict[str, Any], webhook_url: str) -> bool:
         return False
     
     try:
-        # For Power Automate workflows, we need to wrap the Adaptive Card
-        # in a payload that the workflow can process
-        payload = {
-            "type": "message",
-            "attachments": [
-                {
-                    "contentType": "application/vnd.microsoft.card.adaptive",
-                    "content": adaptive_card
-                }
-            ]
-        }
+        # For Teams Workflows, we send the data directly
+        # The workflow will use this data in the Adaptive Card template
+        payload = event_data
         
         # Convert payload to JSON string
         payload_json = json.dumps(payload)
@@ -1192,18 +1022,9 @@ def post_to_teams(adaptive_card: Dict[str, Any], webhook_url: str) -> bool:
         }
         
         # Extract title for logging
-        title = "Unknown"
-        if adaptive_card.get("body") and len(adaptive_card["body"]) > 0:
-            first_container = adaptive_card["body"][0]
-            if first_container.get("items") and len(first_container["items"]) > 0:
-                column_set = first_container["items"][0]
-                if column_set.get("columns") and len(column_set["columns"]) > 1:
-                    text_column = column_set["columns"][1]
-                    if text_column.get("items") and len(text_column["items"]) > 0:
-                        title_block = text_column["items"][0]
-                        title = title_block.get("text", "Unknown")
+        title = event_data.get("title", "Unknown")
         
-        logger.info(f"Posting Adaptive Card to Teams: {title}")
+        logger.info(f"Posting event data to Teams: {title}")
         
         response = http.request(
             'POST',
@@ -1213,9 +1034,9 @@ def post_to_teams(adaptive_card: Dict[str, Any], webhook_url: str) -> bool:
             timeout=10.0  # 10 second timeout
         )
         
-        # Power Automate workflows typically return 202 (Accepted) for successful posts
+        # Teams Workflows typically return 202 (Accepted) for successful posts
         if response.status in [200, 202]:
-            logger.info("Successfully posted Adaptive Card to Teams")
+            logger.info("Successfully posted event data to Teams")
             return True
         else:
             # Log the error response for debugging (with status code and response body)
@@ -1224,7 +1045,7 @@ def post_to_teams(adaptive_card: Dict[str, Any], webhook_url: str) -> bool:
             return False
             
     except Exception as e:
-        logger.error(f"Error posting Adaptive Card to Teams: {str(e)}")
+        logger.error(f"Error posting event data to Teams: {str(e)}")
         return False
 
 
@@ -1411,13 +1232,13 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         
         # Message formatting (task 8)
         try:
-            teams_message = format_teams_message(parsed_event)
-            log_with_context(logging.INFO, f"Successfully formatted Teams message", 
+            event_data = format_teams_message(parsed_event)
+            log_with_context(logging.INFO, f"Successfully formatted event data", 
                            request_id=request_id, event_type=event_type,
                            event_category=parsed_event.event_category, 
                            repository=parsed_event.repository)
         except ValueError as e:
-            log_with_context(logging.ERROR, f"Failed to format Teams message: {str(e)}", 
+            log_with_context(logging.ERROR, f"Failed to format event data: {str(e)}", 
                            request_id=request_id, event_type=event_type,
                            repository=parsed_event.repository if parsed_event else None)
             return {
@@ -1436,7 +1257,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'body': json.dumps({'error': 'Server configuration error'})
             }
         
-        success = post_to_teams(teams_message, teams_url)
+        success = post_to_teams(event_data, teams_url)
         if not success:
             log_with_context(logging.ERROR, "Failed to post message to Teams", 
                            request_id=request_id, event_type=event_type,
