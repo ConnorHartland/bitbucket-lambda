@@ -86,31 +86,10 @@
       "items": [
         {
           "type": "TextBlock",
-          "text": "@{coalesce(triggerBody()?['subtitle'], triggerBody()?['description'])}",
+          "text": "@{if(equals(triggerBody()?['build_status'], 'FAILED'), 'Click \"View Pipeline\" below to see detailed error logs and failure information.', coalesce(triggerBody()?['subtitle'], triggerBody()?['description']))}",
           "wrap": true,
           "size": "Default",
           "isSubtle": true
-        }
-      ],
-      "spacing": "Medium"
-    },
-    {
-      "type": "Container",
-      "style": "attention",
-      "items": [
-        {
-          "type": "TextBlock",
-          "text": "❌ **Failure Details**",
-          "weight": "Bolder",
-          "size": "Medium",
-          "color": "Attention"
-        },
-        {
-          "type": "TextBlock",
-          "text": "@{if(empty(triggerBody()?['description']), 'Check the pipeline logs for detailed error information.', triggerBody()?['description'])}",
-          "wrap": true,
-          "size": "Default",
-          "spacing": "Small"
         }
       ],
       "spacing": "Medium"
@@ -119,7 +98,7 @@
   "actions": [
     {
       "type": "Action.OpenUrl",
-      "title": "View Details",
+      "title": "@{if(equals(triggerBody()?['build_status'], 'FAILED'), '🔍 View Pipeline Logs', '📋 View Pipeline')}",
       "url": "@{triggerBody()?['url']}"
     }
   ]

@@ -732,12 +732,16 @@ def _parse_commit_status_event(body: Dict[str, Any], event_type: str, repo_name:
     }
     action = action_map.get(state, state.lower())
     
+    # Extract branch information from refname
+    branch = commit_status.get('refname', 'unknown')
+    
     # Build metadata
     metadata = {
         'state': state,
         'commit_hash': commit_hash,
         'build_name': name,
-        'build_url': commit_status.get('url', '')
+        'build_url': commit_status.get('url', ''),
+        'branch': branch
     }
     
     return ParsedEvent(
@@ -910,7 +914,8 @@ def create_adaptive_card_data(parsed_event: ParsedEvent) -> Dict[str, Any]:
         data.update({
             "build_name": parsed_event.metadata.get('build_name', 'Build'),
             "build_status": parsed_event.metadata.get('state', 'unknown'),
-            "commit_hash": parsed_event.metadata.get('commit_hash', 'unknown')
+            "commit_hash": parsed_event.metadata.get('commit_hash', 'unknown'),
+            "branch": parsed_event.metadata.get('branch', 'unknown')
         })
     
     return data
