@@ -1,6 +1,0 @@
-{
-  "body": "{\"commit_status\":{\"state\":\"FAILED\",\"name\":\"Build Pipeline\",\"description\":\"Tests failed\",\"url\":\"https://bitbucket.org/workspace/repo/pipelines/results/123\",\"commit\":{\"hash\":\"abc123def456\"}},\"repository\":{\"full_name\":\"workspace/my-repo\"}}",
-  "headers": {
-    "X-Event-Key": "repo:commit_status_updated"
-  }
-}

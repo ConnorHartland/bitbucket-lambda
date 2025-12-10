@@ -9,13 +9,13 @@ from botocore.exceptions import ClientError, BotoCoreError
 # Import the lambda function module
 import sys
 sys.path.append('lambda')
-from lambda_function import (
+from aws_secrets import (
     get_secret,
     retrieve_webhook_secret,
     retrieve_teams_url,
-    Configuration,
     _cached_secrets
 )
+from config import Configuration
 
 
 @given(
@@ -32,7 +32,7 @@ def test_property_7_secure_secret_retrieval(secret_arn, secret_value):
     **Validates: Requirements 3.5**
     """
     # Clear cache before test
-    _cached_secrets.clear()
+    _cached_aws_secrets.clear()
     
     # Mock the Secrets Manager client
     mock_client = MagicMock()
@@ -83,7 +83,7 @@ def test_property_18_secret_rotation_support(teams_arn, bitbucket_arn, teams_url
     **Validates: Requirements 8.5**
     """
     # Clear cache before test
-    _cached_secrets.clear()
+    _cached_aws_secrets.clear()
     
     # If ARNs are the same, make them different to test properly
     if teams_arn == bitbucket_arn:
@@ -134,7 +134,7 @@ def test_property_18_secret_rotation_support(teams_arn, bitbucket_arn, teams_url
         assert bitbucket_arn in _cached_secrets
         
         # Simulate secret rotation by clearing cache (new Lambda invocation)
-        _cached_secrets.clear()
+        _cached_aws_secrets.clear()
         
         # Set up updated responses for rotated secrets
         def mock_get_secret_value_rotated(SecretId):
@@ -173,7 +173,7 @@ def test_get_secret_with_client_error():
     secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:test"
     
     # Clear cache
-    _cached_secrets.clear()
+    _cached_aws_secrets.clear()
     
     # Mock client that raises ClientError
     mock_client = MagicMock()
@@ -195,7 +195,7 @@ def test_get_secret_with_missing_secret_string():
     secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:test"
     
     # Clear cache
-    _cached_secrets.clear()
+    _cached_aws_secrets.clear()
     
     # Mock client that returns response without SecretString
     mock_client = MagicMock()

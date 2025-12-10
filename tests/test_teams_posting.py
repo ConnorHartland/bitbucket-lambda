@@ -10,7 +10,14 @@ from unittest.mock import patch, MagicMock
 # Import the lambda function module
 import sys
 sys.path.append('lambda')
-from lambda_function import post_to_teams, TeamsMessageCard
+from lambda_function import lambda_handler
+from config import Configuration, FilterConfig
+from signature import compute_signature, extract_signature_from_headers, verify_signature, validate_webhook_signature
+from aws_secrets import retrieve_webhook_secret, retrieve_teams_url
+from event_parser import parse_bitbucket_event, ParsedEvent, _parse_pull_request_event, _parse_push_event, _parse_comment_event, _parse_commit_status_event
+from teams_formatter import format_teams_message, get_event_color, create_adaptive_card_data
+from teams_client import post_to_teams
+
 
 
 # Test data generators

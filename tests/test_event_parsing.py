@@ -8,7 +8,7 @@ from unittest.mock import patch
 # Import the lambda function module
 import sys
 sys.path.append('lambda')
-from lambda_function import (
+from event_parser import (
     parse_bitbucket_event,
     ParsedEvent,
     _parse_pull_request_event,

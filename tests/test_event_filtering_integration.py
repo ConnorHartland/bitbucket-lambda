@@ -7,13 +7,20 @@ from unittest.mock import patch, MagicMock
 # Import the lambda function module
 import sys
 sys.path.append('lambda')
-from lambda_function import lambda_handler, Configuration, FilterConfig
+from lambda_function import lambda_handler
+from config import Configuration, FilterConfig
+from signature import compute_signature, extract_signature_from_headers, verify_signature, validate_webhook_signature
+from aws_secrets import retrieve_webhook_secret, retrieve_teams_url
+from event_parser import parse_bitbucket_event, ParsedEvent, _parse_pull_request_event, _parse_push_event, _parse_comment_event, _parse_commit_status_event
+from teams_formatter import format_teams_message, get_event_color, create_adaptive_card_data
+from teams_client import post_to_teams
+
 
 
 def test_event_filtering_integration_filtered_event():
     """Test that filtered events return success without processing"""
     # Import signature computation function
-    from lambda_function import compute_signature
+    from signature import compute_signature
     
     # Mock a configuration with explicit filtering
     mock_config = Configuration(
@@ -54,7 +61,7 @@ def test_event_filtering_integration_filtered_event():
     # Patch the global variables and mock secrets retrieval
     with patch('lambda_function.CONFIG', mock_config), \
          patch('lambda_function.FILTER_CONFIG', mock_filter_config), \
-         patch('lambda_function.retrieve_webhook_secret', return_value=test_secret):
+         patch('aws_secrets.retrieve_webhook_secret', return_value=test_secret):
         response = lambda_handler(event, context)
     
     # Verify response - should be 200 but indicate event was filtered
@@ -67,7 +74,7 @@ def test_event_filtering_integration_filtered_event():
 def test_event_filtering_integration_allowed_event():
     """Test that allowed events proceed with processing"""
     # Import signature computation function
-    from lambda_function import compute_signature
+    from signature import compute_signature
     
     # Mock a configuration with explicit filtering
     mock_config = Configuration(
@@ -108,9 +115,9 @@ def test_event_filtering_integration_allowed_event():
     # Patch the global variables and mock secrets retrieval and Teams posting
     with patch('lambda_function.CONFIG', mock_config), \
          patch('lambda_function.FILTER_CONFIG', mock_filter_config), \
-         patch('lambda_function.retrieve_webhook_secret', return_value=test_secret), \
-         patch('lambda_function.retrieve_teams_url', return_value='https://outlook.office.com/webhook/test'), \
-         patch('lambda_function.post_to_teams', return_value=True):
+         patch('aws_secrets.retrieve_webhook_secret', return_value=test_secret), \
+         patch('aws_secrets.retrieve_teams_url', return_value='https://outlook.office.com/webhook/test'), \
+         patch('teams_client.post_to_teams', return_value=True):
         response = lambda_handler(event, context)
     
     # Verify response - should be 200 and proceed with processing
@@ -124,7 +131,7 @@ def test_event_filtering_integration_allowed_event():
 def test_event_filtering_integration_failures_mode():
     """Test that failures mode correctly identifies and processes failure events"""
     # Import signature computation function
-    from lambda_function import compute_signature
+    from signature import compute_signature
     
     # Mock a configuration with failures filtering
     mock_config = Configuration(
@@ -166,9 +173,9 @@ def test_event_filtering_integration_failures_mode():
     # Patch the global variables and mock secrets retrieval and Teams posting
     with patch('lambda_function.CONFIG', mock_config), \
          patch('lambda_function.FILTER_CONFIG', mock_filter_config), \
-         patch('lambda_function.retrieve_webhook_secret', return_value=test_secret), \
-         patch('lambda_function.retrieve_teams_url', return_value='https://outlook.office.com/webhook/test'), \
-         patch('lambda_function.post_to_teams', return_value=True):
+         patch('aws_secrets.retrieve_webhook_secret', return_value=test_secret), \
+         patch('aws_secrets.retrieve_teams_url', return_value='https://outlook.office.com/webhook/test'), \
+         patch('teams_client.post_to_teams', return_value=True):
         response = lambda_handler(event, context)
     
     # Verify response - should be 200 and proceed with processing (failure event should be allowed)

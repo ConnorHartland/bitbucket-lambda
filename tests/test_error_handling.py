@@ -126,7 +126,7 @@ class TestErrorLoggingProperties:
         # Mock configuration to be loaded
         with patch('lambda_function.CONFIG') as mock_config, \
              patch('lambda_function.FILTER_CONFIG') as mock_filter_config, \
-             patch('lambda_function.retrieve_webhook_secret') as mock_secret:
+             patch('aws_secrets.retrieve_webhook_secret') as mock_secret:
             
             mock_config.teams_webhook_url_secret_arn = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url'
             mock_config.bitbucket_secret_arn = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:webhook-secret'
@@ -265,12 +265,12 @@ class TestExceptionStatusCodeMappingProperties:
                     response = lambda_handler(event, mock_context)
             elif isinstance(exception, (ConnectionError, TimeoutError)):
                 # For network errors, mock the Teams posting
-                with patch('lambda_function.retrieve_webhook_secret', return_value='test_secret'), \
-                     patch('lambda_function.validate_webhook_signature', return_value=(True, None)), \
-                     patch('lambda_function.parse_bitbucket_event') as mock_parse, \
-                     patch('lambda_function.format_teams_message') as mock_format, \
-                     patch('lambda_function.retrieve_teams_url', return_value='https://teams.url'), \
-                     patch('lambda_function.post_to_teams', side_effect=exception):
+                with patch('aws_secrets.retrieve_webhook_secret', return_value='test_secret'), \
+                     patch('signature.validate_webhook_signature', return_value=(True, None)), \
+                     patch('event_parser.parse_bitbucket_event') as mock_parse, \
+                     patch('teams_formatter.format_teams_message') as mock_format, \
+                     patch('aws_secrets.retrieve_teams_url', return_value='https://teams.url'), \
+                     patch('teams_client.post_to_teams', side_effect=exception):
                     
                     # Mock successful parsing and formatting
                     mock_parsed_event = Mock()
@@ -282,9 +282,9 @@ class TestExceptionStatusCodeMappingProperties:
                     response = lambda_handler(event, mock_context)
             else:
                 # For other exceptions, mock the parsing function
-                with patch('lambda_function.retrieve_webhook_secret', return_value='test_secret'), \
-                     patch('lambda_function.validate_webhook_signature', return_value=(True, None)), \
-                     patch('lambda_function.parse_bitbucket_event', side_effect=exception):
+                with patch('aws_secrets.retrieve_webhook_secret', return_value='test_secret'), \
+                     patch('signature.validate_webhook_signature', return_value=(True, None)), \
+                     patch('event_parser.parse_bitbucket_event', side_effect=exception):
                     
                     response = lambda_handler(event, mock_context)
             

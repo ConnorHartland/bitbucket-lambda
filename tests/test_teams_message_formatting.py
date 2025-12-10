@@ -9,15 +9,11 @@ from unittest.mock import patch
 # Import the lambda function module
 import sys
 sys.path.append('lambda')
-from lambda_function import (
+from teams_formatter import (
     format_teams_message,
-    ParsedEvent,
-    TeamsMessageCard,
-    MessageSection,
-    Fact,
-    Action,
     get_event_color
 )
+from event_parser import ParsedEvent
 
 
 # Test data generators

@@ -8,7 +8,7 @@ from unittest.mock import patch
 # Import the lambda function module
 import sys
 sys.path.append('lambda')
-from lambda_function import (
+from signature import (
     extract_signature_from_headers,
     compute_signature,
     verify_signature,

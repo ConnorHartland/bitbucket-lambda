@@ -14,6 +14,27 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.pytest_cache/
+.hypothesis/
+
+# Development and debug files
+debug_*.py
+debug_*.json
+test_*.py
+reverse_engineer_*.py
+sample_*.json
+*_payload.json
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Development specs and notes
+.kiro/
+*.md.bak
 
 # SAM (if keeping for reference)
 .aws-sam/
