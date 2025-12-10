@@ -28,7 +28,7 @@
               "items": [
                 {
                   "type": "TextBlock",
-                  "text": "🚀 **Deployment Notification**",
+                  "text": "🔧 **Pipeline Status**",
                   "weight": "Bolder",
                   "size": "Large",
                   "wrap": true,
@@ -74,12 +74,16 @@
               "value": "@{triggerBody()?['repository']}"
             },
             {
-              "title": "Environment",
-              "value": "@{coalesce(triggerBody()?['environment'], triggerBody()?['branch'], 'N/A')}"
+              "title": "Branch",
+              "value": "@{coalesce(triggerBody()?['branch'], if(not(empty(triggerBody()?['branch_flow'])), triggerBody()?['branch_flow'], 'main'))}"
             },
             {
-              "title": "Deployed by",
-              "value": "@{triggerBody()?['author']}"
+              "title": "Pipeline",
+              "value": "@{coalesce(triggerBody()?['build_name'], triggerBody()?['action'], 'Build')}"
+            },
+            {
+              "title": "Triggered by",
+              "value": "@{if(equals(triggerBody()?['author'], 'SYSTEM'), concat('System (', coalesce(triggerBody()?['event_category'], 'automated'), ')'), triggerBody()?['author'])}"
             },
             {
               "title": "Status",

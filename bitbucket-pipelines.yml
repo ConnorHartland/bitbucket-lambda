@@ -16,8 +16,9 @@ definitions:
         caches:
           - terraform
         script:
-          # Install tflint
-          - wget -O- https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          # Install tflint (Alpine Linux compatible)
+          - apk add --no-cache curl unzip
+          - curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | sh
           # Format check
           - terraform fmt -check -recursive
           # Initialize Terraform
