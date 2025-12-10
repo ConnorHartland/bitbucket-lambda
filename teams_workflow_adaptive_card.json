@@ -62,19 +62,19 @@
             },
             {
               "title": "Branch",
-              "value": "@{coalesce(triggerBody()?['branch'], triggerBody()?['branch_flow'])}"
+              "value": "@{triggerBody()?['branch']}"
             },
             {
               "title": "Pipeline",
-              "value": "@{coalesce(triggerBody()?['build_name'], triggerBody()?['action'], 'Build')}"
+              "value": "@{triggerBody()?['build_name']}"
             },
             {
               "title": "Triggered by",
-              "value": "@{if(equals(triggerBody()?['author'], 'SYSTEM'), concat('System (', coalesce(triggerBody()?['event_category'], 'automated'), ')'), triggerBody()?['author'])}"
+              "value": "@{if(equals(triggerBody()?['author'], 'System'), 'Automated Pipeline', triggerBody()?['author'])}"
             },
             {
               "title": "Status",
-              "value": "@{coalesce(triggerBody()?['build_status'], triggerBody()?['state'], triggerBody()?['action'])}"
+              "value": "@{triggerBody()?['build_status']}"
             }
           ]
         }
@@ -107,11 +107,10 @@
         },
         {
           "type": "TextBlock",
-          "text": "@{coalesce(triggerBody()?['error_message'], triggerBody()?['failure_reason'], triggerBody()?['build_error'], 'Check the pipeline logs for detailed error information.')}",
+          "text": "@{if(empty(triggerBody()?['description']), 'Check the pipeline logs for detailed error information.', triggerBody()?['description'])}",
           "wrap": true,
           "size": "Default",
-          "spacing": "Small",
-          "fontType": "Monospace"
+          "spacing": "Small"
         }
       ],
       "spacing": "Medium"
