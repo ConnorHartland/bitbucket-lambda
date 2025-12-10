@@ -4,7 +4,7 @@
   "body": [
     {
       "type": "Container",
-      "style": "emphasis",
+      "style": "default",
       "items": [
         {
           "type": "ColumnSet",
@@ -16,9 +16,8 @@
                 {
                   "type": "Image",
                   "url": "https://wac-cdn.atlassian.com/dam/jcr:e2a6f06f-b3d5-4002-aed3-73539c56a2eb/bitbucket_rgb_blue.png",
-                  "size": "Medium",
-                  "style": "Default",
-                  "spacing": "None"
+                  "size": "Small",
+                  "style": "Default"
                 }
               ],
               "verticalContentAlignment": "Center"
@@ -29,11 +28,19 @@
               "items": [
                 {
                   "type": "TextBlock",
-                  "text": "@{triggerBody()?['title']}",
+                  "text": "🚀 **Deployment Notification**",
                   "weight": "Bolder",
                   "size": "Large",
                   "wrap": true,
-                  "color": "@{if(equals(triggerBody()?['theme_color'], '#DC3545'), 'Attention', if(equals(triggerBody()?['theme_color'], '#28A745'), 'Good', if(equals(triggerBody()?['theme_color'], '#FFC107'), 'Warning', 'Accent')))}",
+                  "color": "Accent"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "@{triggerBody()?['title']}",
+                  "weight": "Default",
+                  "size": "Medium",
+                  "wrap": true,
+                  "color": "@{if(equals(triggerBody()?['theme_color'], '#DC3545'), 'Attention', if(equals(triggerBody()?['theme_color'], '#28A745'), 'Good', if(equals(triggerBody()?['theme_color'], '#FFC107'), 'Warning', 'Default')))}",
                   "spacing": "Small"
                 }
               ],
@@ -45,268 +52,63 @@
               "items": [
                 {
                   "type": "TextBlock",
-                  "text": "@{if(equals(triggerBody()?['event_category'], 'pull_request'), '🔀', if(equals(triggerBody()?['event_category'], 'push'), '📤', if(equals(triggerBody()?['event_category'], 'comment'), '💬', if(equals(triggerBody()?['event_category'], 'commit_status'), '🔧', '📋'))))}",
-                  "size": "Large",
-                  "spacing": "None"
+                  "text": "@{if(equals(triggerBody()?['theme_color'], '#28A745'), '✅', if(equals(triggerBody()?['theme_color'], '#DC3545'), '❌', if(equals(triggerBody()?['theme_color'], '#FFC107'), '⚠️', '🔄')))}",
+                  "size": "ExtraLarge",
+                  "horizontalAlignment": "Center"
                 }
               ],
               "verticalContentAlignment": "Center"
             }
           ]
         }
-      ],
-      "bleed": true
+      ]
     },
     {
       "type": "Container",
       "items": [
-        {
-          "type": "TextBlock",
-          "text": "@{triggerBody()?['subtitle']}",
-          "isSubtle": true,
-          "wrap": true,
-          "spacing": "Medium",
-          "size": "Medium",
-          "style": "emphasis"
-        }
-      ],
-      "spacing": "Medium",
-      "$when": "@{not(empty(triggerBody()?['subtitle']))}"
-    },
-    {
-      "type": "Container",
-      "style": "default",
-      "items": [
-        {
-          "type": "TextBlock",
-          "text": "📊 **Event Details**",
-          "weight": "Bolder",
-          "size": "Medium",
-          "color": "Accent",
-          "spacing": "Medium"
-        },
         {
           "type": "FactSet",
           "facts": [
             {
-              "title": "🏛️ Repository",
+              "title": "Repository",
               "value": "@{triggerBody()?['repository']}"
             },
             {
-              "title": "⚡ Event",
-              "value": "@{triggerBody()?['action']}"
+              "title": "Environment",
+              "value": "@{coalesce(triggerBody()?['environment'], triggerBody()?['branch'], 'N/A')}"
             },
             {
-              "title": "👤 Author",
+              "title": "Deployed by",
               "value": "@{triggerBody()?['author']}"
+            },
+            {
+              "title": "Status",
+              "value": "@{coalesce(triggerBody()?['build_status'], triggerBody()?['state'], triggerBody()?['action'])}"
             }
-          ],
-          "spacing": "Small"
+          ]
         }
       ],
       "spacing": "Medium"
     },
     {
       "type": "Container",
-      "style": "good",
       "items": [
         {
           "type": "TextBlock",
-          "text": "🔀 **Pull Request Details**",
-          "weight": "Bolder",
-          "size": "Medium",
-          "color": "Good",
-          "spacing": "Medium"
-        },
-        {
-          "type": "FactSet",
-          "facts": [
-            {
-              "title": "🆔 PR ID",
-              "value": "@{triggerBody()?['pr_id']}"
-            },
-            {
-              "title": "🌿 Source → Target",
-              "value": "@{triggerBody()?['branch_flow']}"
-            },
-            {
-              "title": "📊 State",
-              "value": "@{triggerBody()?['state']}"
-            }
-          ],
-          "spacing": "Small"
+          "text": "@{coalesce(triggerBody()?['subtitle'], triggerBody()?['description'])}",
+          "wrap": true,
+          "size": "Default",
+          "isSubtle": true
         }
       ],
-      "spacing": "Medium",
-      "$when": "@{equals(triggerBody()?['event_category'], 'pull_request')}"
-    },
-    {
-      "type": "Container",
-      "style": "attention",
-      "items": [
-        {
-          "type": "TextBlock",
-          "text": "📤 **Push Details**",
-          "weight": "Bolder",
-          "size": "Medium",
-          "color": "Attention",
-          "spacing": "Medium"
-        },
-        {
-          "type": "FactSet",
-          "facts": [
-            {
-              "title": "🌿 Branch",
-              "value": "@{triggerBody()?['branch']}"
-            },
-            {
-              "title": "📝 Commits",
-              "value": "@{triggerBody()?['commit_count']}"
-            }
-          ],
-          "spacing": "Small"
-        },
-        {
-          "type": "Container",
-          "style": "emphasis",
-          "items": [
-            {
-              "type": "TextBlock",
-              "text": "📋 **Recent Commits:**",
-              "weight": "Bolder",
-              "size": "Small",
-              "color": "Default",
-              "spacing": "Medium"
-            },
-            {
-              "type": "TextBlock",
-              "text": "@{triggerBody()?['commit_details']}",
-              "wrap": true,
-              "size": "Small",
-              "spacing": "Small",
-              "fontType": "Monospace"
-            }
-          ],
-          "spacing": "Small",
-          "$when": "@{not(empty(triggerBody()?['commit_details']))}"
-        }
-      ],
-      "spacing": "Medium",
-      "$when": "@{equals(triggerBody()?['event_category'], 'push')}"
-    },
-    {
-      "type": "Container",
-      "style": "warning",
-      "items": [
-        {
-          "type": "TextBlock",
-          "text": "💬 **Comment Details**",
-          "weight": "Bolder",
-          "size": "Medium",
-          "color": "Warning",
-          "spacing": "Medium"
-        },
-        {
-          "type": "FactSet",
-          "facts": [
-            {
-              "title": "📍 Context",
-              "value": "@{triggerBody()?['context_title']}"
-            }
-          ],
-          "spacing": "Small"
-        },
-        {
-          "type": "Container",
-          "style": "emphasis",
-          "items": [
-            {
-              "type": "TextBlock",
-              "text": "💭 **Comment:**",
-              "weight": "Bolder",
-              "size": "Small",
-              "color": "Default",
-              "spacing": "Medium"
-            },
-            {
-              "type": "TextBlock",
-              "text": "@{triggerBody()?['description']}",
-              "wrap": true,
-              "size": "Medium",
-              "spacing": "Small",
-              "style": "emphasis",
-              "fontType": "Default"
-            }
-          ],
-          "spacing": "Small",
-          "$when": "@{not(empty(triggerBody()?['description']))}"
-        }
-      ],
-      "spacing": "Medium",
-      "$when": "@{equals(triggerBody()?['event_category'], 'comment')}"
-    },
-    {
-      "type": "Container",
-      "style": "accent",
-      "items": [
-        {
-          "type": "TextBlock",
-          "text": "🔧 **Build Status**",
-          "weight": "Bolder",
-          "size": "Medium",
-          "color": "Accent",
-          "spacing": "Medium"
-        },
-        {
-          "type": "FactSet",
-          "facts": [
-            {
-              "title": "🏗️ Build",
-              "value": "@{triggerBody()?['build_name']}"
-            },
-            {
-              "title": "📊 Status",
-              "value": "@{triggerBody()?['build_status']}"
-            },
-            {
-              "title": "🔗 Commit",
-              "value": "@{triggerBody()?['commit_hash']}"
-            }
-          ],
-          "spacing": "Small"
-        },
-        {
-          "type": "Container",
-          "style": "emphasis",
-          "items": [
-            {
-              "type": "TextBlock",
-              "text": "@{triggerBody()?['description']}",
-              "wrap": true,
-              "size": "Medium",
-              "isSubtle": true,
-              "spacing": "Small"
-            }
-          ],
-          "spacing": "Small",
-          "$when": "@{not(empty(triggerBody()?['description']))}"
-        }
-      ],
-      "spacing": "Medium",
-      "$when": "@{equals(triggerBody()?['event_category'], 'commit_status')}"
+      "spacing": "Medium"
     }
   ],
   "actions": [
     {
       "type": "Action.OpenUrl",
-      "title": "🔗 View in Bitbucket",
-      "url": "@{triggerBody()?['url']}",
-      "style": "positive"
+      "title": "View Details",
+      "url": "@{triggerBody()?['url']}"
     }
-  ],
-  "msteams": {
-    "width": "Full"
-  },
-  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-  "$when": "@{not(empty(triggerBody()?['url']))}"
+  ]
 }
