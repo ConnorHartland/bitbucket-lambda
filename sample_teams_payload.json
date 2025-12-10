@@ -1,0 +1,107 @@
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "content": {
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": [
+          {
+            "type": "Container",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "ColumnSet",
+                "columns": [
+                  {
+                    "type": "Column",
+                    "width": "auto",
+                    "items": [
+                      {
+                        "type": "Image",
+                        "url": "https://wac-cdn.atlassian.com/dam/jcr:e2a6f06f-b3d5-4002-aed3-73539c56a2eb/bitbucket_rgb_blue.png",
+                        "size": "Small",
+                        "style": "Person"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Column",
+                    "width": "stretch",
+                    "items": [
+                      {
+                        "type": "TextBlock",
+                        "text": "Add new authentication feature",
+                        "weight": "Bolder",
+                        "size": "Medium",
+                        "wrap": true,
+                        "color": "Accent"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "by John Doe",
+                "isSubtle": true,
+                "wrap": true,
+                "spacing": "Small"
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "items": [
+              {
+                "type": "FactSet",
+                "facts": [
+                  {
+                    "title": "Repository",
+                    "value": "mycompany/awesome-project"
+                  },
+                  {
+                    "title": "Event",
+                    "value": "Created"
+                  },
+                  {
+                    "title": "Author",
+                    "value": "John Doe"
+                  },
+                  {
+                    "title": "PR ID",
+                    "value": "123"
+                  },
+                  {
+                    "title": "Source \u2192 Target",
+                    "value": "feature/oauth2-auth \u2192 main"
+                  },
+                  {
+                    "title": "State",
+                    "value": "OPEN"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "msteams": {
+          "width": "Full"
+        },
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "View in Bitbucket",
+            "url": "https://bitbucket.org/mycompany/awesome-project/pull-requests/123"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,17 +1,17 @@
 # Teams Message Examples
 
-This document shows examples of how different Bitbucket events appear as Microsoft Teams messages, including screenshots and message card JSON structures.
+This document shows examples of how different Bitbucket events appear as Microsoft Teams Adaptive Cards, including card structures and visual examples.
 
-## Message Card Format
+## Adaptive Card Format
 
-All Teams messages use the MessageCard format with the following structure:
+All Teams messages use the modern Adaptive Card format with the following structure:
 
-- **Theme Color**: Event-specific color coding
-- **Summary**: Brief description for notifications
-- **Activity Title**: Main event description
-- **Activity Subtitle**: Author and context information
-- **Facts**: Key-value pairs with event details
-- **Potential Actions**: Clickable buttons linking to Bitbucket
+- **Header Container**: Bitbucket logo and color-coded title
+- **Subtitle**: Author and context information
+- **Event-specific Content**: Commits, comments, or build details
+- **Facts Section**: Key-value pairs with structured event details
+- **Actions**: Interactive buttons linking to Bitbucket
+- **Responsive Design**: Adapts to different screen sizes and themes
 
 ## Color Coding
 
