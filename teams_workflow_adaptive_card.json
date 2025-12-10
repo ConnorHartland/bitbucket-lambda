@@ -11,19 +11,6 @@
           "columns": [
             {
               "type": "Column",
-              "width": "auto",
-              "items": [
-                {
-                  "type": "Image",
-                  "url": "https://wac-cdn.atlassian.com/dam/jcr:e2a6f06f-b3d5-4002-aed3-73539c56a2eb/bitbucket_rgb_blue.png",
-                  "size": "Small",
-                  "style": "Default"
-                }
-              ],
-              "verticalContentAlignment": "Center"
-            },
-            {
-              "type": "Column",
               "width": "stretch",
               "items": [
                 {
@@ -75,7 +62,7 @@
             },
             {
               "title": "Branch",
-              "value": "@{coalesce(triggerBody()?['branch'], if(not(empty(triggerBody()?['branch_flow'])), triggerBody()?['branch_flow'], 'main'))}"
+              "value": "@{coalesce(triggerBody()?['branch'], triggerBody()?['branch_flow'])}"
             },
             {
               "title": "Pipeline",
@@ -103,6 +90,28 @@
           "wrap": true,
           "size": "Default",
           "isSubtle": true
+        }
+      ],
+      "spacing": "Medium"
+    },
+    {
+      "type": "Container",
+      "style": "attention",
+      "items": [
+        {
+          "type": "TextBlock",
+          "text": "❌ **Failure Details**",
+          "weight": "Bolder",
+          "size": "Medium",
+          "color": "Attention"
+        },
+        {
+          "type": "TextBlock",
+          "text": "@{coalesce(triggerBody()?['error_message'], triggerBody()?['failure_reason'], triggerBody()?['build_error'], 'Check the pipeline logs for detailed error information.')}",
+          "wrap": true,
+          "size": "Default",
+          "spacing": "Small",
+          "fontType": "Monospace"
         }
       ],
       "spacing": "Medium"
