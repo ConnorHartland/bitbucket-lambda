@@ -88,6 +88,7 @@ def _parse_pull_request_event(body: Dict[str, Any], event_type: str, repo_name: 
     # Extract author information
     author_info = pullrequest.get('author', {})
     author = author_info.get('display_name', author_info.get('username', 'unknown'))
+    author_email = author_info.get('email_address', author_info.get('email', ''))
     
     # Extract branch information
     source = pullrequest.get('source', {})
@@ -100,7 +101,8 @@ def _parse_pull_request_event(body: Dict[str, Any], event_type: str, repo_name: 
         'source_branch': source_branch,
         'target_branch': target_branch,
         'pr_id': pullrequest.get('id'),
-        'state': pullrequest.get('state', 'unknown')
+        'state': pullrequest.get('state', 'unknown'),
+        'author_email': author_email
     }
     
     return ParsedEvent(
@@ -137,6 +139,7 @@ def _parse_push_event(body: Dict[str, Any], event_type: str, repo_name: str) -> 
     # Extract pusher information
     actor = body.get('actor', {})
     author = actor.get('display_name', actor.get('username', 'unknown'))
+    author_email = actor.get('email_address', actor.get('email', ''))
     
     # Get latest commit for URL
     latest_commit = commits[0] if commits else {}
@@ -153,7 +156,8 @@ def _parse_push_event(body: Dict[str, Any], event_type: str, repo_name: str) -> 
                 'author': commit.get('author', {}).get('user', {}).get('display_name', 'unknown')
             }
             for commit in commits[:5]  # Limit to 5 most recent commits
-        ]
+        ],
+        'author_email': author_email
     }
     
     return ParsedEvent(
@@ -177,6 +181,7 @@ def _parse_comment_event(body: Dict[str, Any], event_type: str, repo_name: str) 
     # Extract comment author
     author_info = comment.get('user', {})
     author = author_info.get('display_name', author_info.get('username', 'unknown'))
+    author_email = author_info.get('email_address', author_info.get('email', ''))
     
     # Extract comment content
     comment_text = comment.get('content', {}).get('raw', comment.get('raw', ''))
@@ -205,7 +210,8 @@ def _parse_comment_event(body: Dict[str, Any], event_type: str, repo_name: str) 
         'context_type': context_type,
         'context_title': context_title,
         'comment_id': comment.get('id'),
-        'comment_length': len(comment_text)
+        'comment_length': len(comment_text),
+        'author_email': author_email
     }
     
     return ParsedEvent(

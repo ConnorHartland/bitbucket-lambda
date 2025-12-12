@@ -52,6 +52,30 @@ def get_event_color(event_category: str, action: str, metadata: Dict[str, Any]) 
     return "#6C757D"
 
 
+def create_mention_entity(email: str, display_name: str) -> Dict[str, Any]:
+    """
+    Create a mention entity for Teams Adaptive Card.
+    
+    Args:
+        email: User's email address
+        display_name: User's display name
+    
+    Returns:
+        dict: Mention entity for Teams
+    """
+    if not email:
+        return None
+    
+    return {
+        "type": "mention",
+        "text": f"<at>{display_name}</at>",
+        "mentioned": {
+            "id": email,
+            "name": display_name
+        }
+    }
+
+
 def create_adaptive_card_data(parsed_event: ParsedEvent) -> Dict[str, Any]:
     """
     Create data payload for Adaptive Card template.
@@ -62,16 +86,24 @@ def create_adaptive_card_data(parsed_event: ParsedEvent) -> Dict[str, Any]:
     Returns:
         dict: Data payload for Teams Workflow Adaptive Card template
     """
+    # Get author email for mentions
+    author_email = parsed_event.metadata.get('author_email', '')
+    
+    # Create mention entity if email is available
+    mention_entity = create_mention_entity(author_email, parsed_event.author) if author_email else None
+    
     # Base data that all events have
     data = {
         "title": parsed_event.title or f"{parsed_event.action.title()} in {parsed_event.repository}",
-        "subtitle": f"by {parsed_event.author}" if parsed_event.author else None,
+        "subtitle": f"by <at>{parsed_event.author}</at>" if mention_entity else f"by {parsed_event.author}" if parsed_event.author else None,
         "repository": parsed_event.repository,
         "action": parsed_event.action.title(),
         "author": parsed_event.author,
+        "author_mention": f"<at>{parsed_event.author}</at>" if mention_entity else parsed_event.author,
         "event_category": parsed_event.event_category,
         "description": parsed_event.description,
-        "url": parsed_event.url
+        "url": parsed_event.url,
+        "mention_entities": [mention_entity] if mention_entity else []
     }
     
     # Add event-specific data
@@ -173,5 +205,12 @@ def format_teams_message(parsed_event: ParsedEvent) -> Dict[str, Any]:
         source = event_data.get('source_branch', 'unknown')
         target = event_data.get('target_branch', 'unknown')
         event_data["branch_flow"] = f"{source} → {target}"
+    
+    # Ensure mention_entities is always a list (even if empty) for the template
+    if 'mention_entities' not in event_data:
+        event_data['mention_entities'] = []
+    
+    # Filter out None entities
+    event_data['mention_entities'] = [entity for entity in event_data['mention_entities'] if entity is not None]
     
     return event_data

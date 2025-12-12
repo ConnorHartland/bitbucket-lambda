@@ -1,6 +1,9 @@
 {
   "type": "AdaptiveCard",
   "version": "1.4",
+  "msteams": {
+    "entities": "@{triggerBody()?['mention_entities']}"
+  },
   "body": [
     {
       "type": "Container",
@@ -70,7 +73,7 @@
             },
             {
               "title": "Triggered by",
-              "value": "@{if(equals(triggerBody()?['author'], 'System'), 'Automated Pipeline', triggerBody()?['author'])}"
+              "value": "@{if(equals(triggerBody()?['author'], 'System'), 'Automated Pipeline', coalesce(triggerBody()?['author_mention'], triggerBody()?['author']))}"
             },
             {
               "title": "Status",
@@ -86,7 +89,7 @@
       "items": [
         {
           "type": "TextBlock",
-          "text": "@{if(equals(triggerBody()?['build_status'], 'FAILED'), 'Click \"View Pipeline\" below to see detailed error logs and failure information.', coalesce(triggerBody()?['subtitle'], triggerBody()?['description']))}",
+          "text": "@{if(equals(triggerBody()?['build_status'], 'FAILED'), concat('🚨 ', coalesce(triggerBody()?['author_mention'], triggerBody()?['author']), ' - Click \"View Pipeline\" below to see detailed error logs and failure information.'), coalesce(triggerBody()?['subtitle'], triggerBody()?['description']))}",
           "wrap": true,
           "size": "Default",
           "isSubtle": true
