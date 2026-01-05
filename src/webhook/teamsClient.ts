@@ -4,7 +4,6 @@
  */
 
 import * as https from 'https';
-import { TeamsMessage } from '../types';
 import { Logger } from '../logger';
 
 /**
@@ -12,13 +11,13 @@ import { Logger } from '../logger';
  * Handles HTTP status 200 and 202 as success
  * Logs errors for failed posts
  *
- * @param message The Teams message to post
+ * @param message The Teams Adaptive Card message to post
  * @param webhookUrl The Teams webhook URL
  * @param logger The logger instance for error logging
  * @returns Promise<boolean> - true if post was successful, false otherwise
  */
 export async function postToTeams(
-  message: TeamsMessage,
+  message: Record<string, any>,
   webhookUrl: string,
   logger: Logger
 ): Promise<boolean> {
@@ -27,13 +26,8 @@ export async function postToTeams(
       // Parse the webhook URL
       const url = new URL(webhookUrl);
 
-      // Prepare the payload
-      const payload = JSON.stringify({
-        title: message.title,
-        description: message.description,
-        link: message.link,
-        color: message.color,
-      });
+      // Prepare the payload - send the Adaptive Card directly
+      const payload = JSON.stringify(message);
 
       // Prepare request options
       const options = {

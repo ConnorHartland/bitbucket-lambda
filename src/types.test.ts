@@ -9,13 +9,17 @@ describe('TypeScript Interfaces', () => {
     const event: FailureEvent = {
       type: 'build_failed',
       repository: 'team/repo',
+      branch: 'main',
+      pipelineName: 'CI Pipeline',
       author: 'developer',
       reason: 'Build failed',
       link: 'https://bitbucket.org/team/repo/commits/abc123',
+      status: 'FAILED',
     };
 
     expect(event.type).toBe('build_failed');
     expect(event.repository).toBe('team/repo');
+    expect(event.status).toBe('FAILED');
   });
 
   it('should allow creating a Config', () => {

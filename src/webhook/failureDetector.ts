@@ -48,13 +48,17 @@ function detectPullRequestRejection(payload: Record<string, any>): FailureEvent 
     const prId = typedPayload.pullrequest.id;
     const prTitle = typedPayload.pullrequest.title || `PR #${prId}`;
     const link = typedPayload.pullrequest.links?.html?.href || '';
+    const branch = typedPayload.pullrequest.source?.branch?.name || 'unknown';
 
     return {
       type: 'pr_rejected',
       repository,
+      branch,
+      pipelineName: `PR #${prId}`,
       author,
       reason: `Pull request rejected: ${prTitle}`,
       link,
+      status: 'REJECTED',
     };
   } catch {
     return null;
@@ -85,13 +89,18 @@ function detectCommitStatusFailure(payload: Record<string, any>): FailureEvent |
     const author = typedPayload.actor.username;
     const reason = typedPayload.commit_status.description || 'Build failed';
     const link = typedPayload.commit_status.url || '';
+    const pipelineName = typedPayload.commit_status.key || 'Pipeline';
+    const branch = typedPayload.commit?.branch || 'unknown';
 
     return {
       type: 'build_failed',
       repository,
+      branch,
+      pipelineName,
       author,
       reason,
       link,
+      status: 'FAILED',
     };
   } catch {
     return null;

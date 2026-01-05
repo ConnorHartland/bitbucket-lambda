@@ -8,9 +8,12 @@
 export interface FailureEvent {
   type: 'pr_rejected' | 'build_failed';
   repository: string;
+  branch?: string;
+  pipelineName?: string;
   author: string;
   reason: string;
   link: string;
+  status: string;
 }
 
 /**
@@ -37,6 +40,9 @@ export interface BitbucketCommitStatusPayload {
     url: string;
     description: string;
   };
+  commit?: {
+    branch?: string;
+  };
   actor: {
     username: string;
   };
@@ -53,6 +59,11 @@ export interface BitbucketPullRequestPayload {
   pullrequest: {
     id: number;
     title: string;
+    source?: {
+      branch?: {
+        name: string;
+      };
+    };
     links: {
       html: {
         href: string;

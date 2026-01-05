@@ -12,60 +12,74 @@ describe('Message Formatting', () => {
       const failure: FailureEvent = {
         type: 'pr_rejected',
         repository: 'team/my-repo',
+        branch: 'feature/new-feature',
+        pipelineName: 'PR #123',
         author: 'reviewer',
         reason: 'Pull request rejected: Add new feature',
         link: 'https://bitbucket.org/team/my-repo/pull-requests/123',
+        status: 'REJECTED',
       };
 
       const message = formatMessage(failure);
 
-      expect(message.title).toBe('Pull Request Rejected - team/my-repo');
-      expect(message.description).toContain('Author: reviewer');
-      expect(message.description).toContain('Reason: Pull request rejected: Add new feature');
-      expect(message.link).toBe('https://bitbucket.org/team/my-repo/pull-requests/123');
-      expect(message.color).toBe('#FF0000');
+      expect(message.type).toBe('AdaptiveCard');
+      expect(message.body).toBeTruthy();
+      expect(message.actions).toBeTruthy();
+      expect(message.actions[0].url).toBe('https://bitbucket.org/team/my-repo/pull-requests/123');
     });
 
-    it('should include repository name in title', () => {
+    it('should include repository name in facts', () => {
       const failure: FailureEvent = {
         type: 'pr_rejected',
         repository: 'my-org/my-project',
+        branch: 'main',
+        pipelineName: 'PR #1',
         author: 'dev',
         reason: 'Code review failed',
         link: 'https://example.com',
+        status: 'REJECTED',
       };
 
       const message = formatMessage(failure);
+      const factSet = message.body[1].items[0];
 
-      expect(message.title).toContain('my-org/my-project');
+      expect(factSet.facts.some((f: any) => f.title === 'Repository' && f.value === 'my-org/my-project')).toBe(true);
     });
 
-    it('should include author in description', () => {
+    it('should include branch in facts', () => {
       const failure: FailureEvent = {
         type: 'pr_rejected',
         repository: 'team/repo',
+        branch: 'feature/test',
+        pipelineName: 'PR #5',
         author: 'john-doe',
         reason: 'Rejected',
         link: 'https://example.com',
+        status: 'REJECTED',
       };
 
       const message = formatMessage(failure);
+      const factSet = message.body[1].items[0];
 
-      expect(message.description).toContain('john-doe');
+      expect(factSet.facts.some((f: any) => f.title === 'Branch' && f.value === 'feature/test')).toBe(true);
     });
 
-    it('should include reason in description', () => {
+    it('should include author in facts', () => {
       const failure: FailureEvent = {
         type: 'pr_rejected',
         repository: 'team/repo',
+        branch: 'main',
+        pipelineName: 'PR #1',
         author: 'reviewer',
         reason: 'Code quality issues detected',
         link: 'https://example.com',
+        status: 'REJECTED',
       };
 
       const message = formatMessage(failure);
+      const factSet = message.body[1].items[0];
 
-      expect(message.description).toContain('Code quality issues detected');
+      expect(factSet.facts.some((f: any) => f.title === 'Triggered by' && f.value === 'reviewer')).toBe(true);
     });
   });
 
@@ -74,58 +88,83 @@ describe('Message Formatting', () => {
       const failure: FailureEvent = {
         type: 'build_failed',
         repository: 'team/my-repo',
+        branch: 'main',
+        pipelineName: 'Build Pipeline',
         author: 'ci-bot',
         reason: 'Build failed: test suite error',
         link: 'https://ci.example.com/builds/123',
+        status: 'FAILED',
       };
 
       const message = formatMessage(failure);
 
-      expect(message.title).toBe('Build Failed - team/my-repo');
-      expect(message.description).toContain('Author: ci-bot');
-      expect(message.description).toContain('Reason: Build failed: test suite error');
-      expect(message.link).toBe('https://ci.example.com/builds/123');
-      expect(message.color).toBe('#FF0000');
+      expect(message.type).toBe('AdaptiveCard');
+      expect(message.body).toBeTruthy();
+      expect(message.actions).toBeTruthy();
     });
 
-    it('should use correct type label for build failures', () => {
+    it('should use Attention color for build failures', () => {
       const failure: FailureEvent = {
         type: 'build_failed',
         repository: 'team/repo',
+        branch: 'main',
+        pipelineName: 'Build',
         author: 'bot',
         reason: 'Tests failed',
         link: 'https://example.com',
+        status: 'FAILED',
+      };
+
+      const message = formatMessage(failure);
+      const titleBlock = message.body[0].items[0].columns[0].items[1];
+
+      expect(titleBlock.color).toBe('Attention');
+    });
+  });
+
+  describe('Adaptive Card Structure', () => {
+    it('should have correct Adaptive Card structure', () => {
+      const failure: FailureEvent = {
+        type: 'build_failed',
+        repository: 'team/repo',
+        branch: 'main',
+        pipelineName: 'Pipeline',
+        author: 'bot',
+        reason: 'Failed',
+        link: 'https://example.com',
+        status: 'FAILED',
       };
 
       const message = formatMessage(failure);
 
-      expect(message.title).toContain('Build Failed');
+      expect(message.type).toBe('AdaptiveCard');
+      expect(message.version).toBe('1.4');
+      expect(message.body).toHaveLength(3);
+      expect(message.actions).toHaveLength(1);
+      expect(message.$schema).toBe('http://adaptivecards.io/schemas/adaptive-card.json');
     });
-  });
 
-  describe('Color Formatting', () => {
-    it('should always use red color for failures', () => {
-      const prFailure: FailureEvent = {
-        type: 'pr_rejected',
-        repository: 'team/repo',
-        author: 'reviewer',
-        reason: 'Rejected',
-        link: 'https://example.com',
-      };
-
-      const buildFailure: FailureEvent = {
+    it('should include all required facts', () => {
+      const failure: FailureEvent = {
         type: 'build_failed',
         repository: 'team/repo',
-        author: 'bot',
-        reason: 'Failed',
+        branch: 'develop',
+        pipelineName: 'CI Pipeline',
+        author: 'developer',
+        reason: 'Build error',
         link: 'https://example.com',
+        status: 'FAILED',
       };
 
-      const prMessage = formatMessage(prFailure);
-      const buildMessage = formatMessage(buildFailure);
+      const message = formatMessage(failure);
+      const factSet = message.body[1].items[0];
+      const facts = factSet.facts;
 
-      expect(prMessage.color).toBe('#FF0000');
-      expect(buildMessage.color).toBe('#FF0000');
+      expect(facts.some((f: any) => f.title === 'Repository')).toBe(true);
+      expect(facts.some((f: any) => f.title === 'Branch')).toBe(true);
+      expect(facts.some((f: any) => f.title === 'Pipeline')).toBe(true);
+      expect(facts.some((f: any) => f.title === 'Triggered by')).toBe(true);
+      expect(facts.some((f: any) => f.title === 'Status')).toBe(true);
     });
   });
 
@@ -139,21 +178,26 @@ describe('Message Formatting', () => {
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
-          (type, repository, author, reason, link) => {
+          fc.string({ minLength: 1 }),
+          fc.string({ minLength: 1 }),
+          (type, repository, branch, pipelineName, author, reason, link) => {
             const failure: FailureEvent = {
               type: type as 'pr_rejected' | 'build_failed',
               repository,
+              branch,
+              pipelineName,
               author,
               reason,
               link,
+              status: type === 'pr_rejected' ? 'REJECTED' : 'FAILED',
             };
 
             const message = formatMessage(failure);
 
-            expect(message.title).toBeTruthy();
-            expect(message.description).toBeTruthy();
-            expect(message.link).toBe(link);
-            expect(message.color).toBeTruthy();
+            expect(message.type).toBe('AdaptiveCard');
+            expect(message.body).toBeTruthy();
+            expect(message.actions).toBeTruthy();
+            expect(message.actions[0].url).toBe(link);
           }
         ),
         { numRuns: 100 }
@@ -161,7 +205,7 @@ describe('Message Formatting', () => {
     });
 
     // Property 11: Failure Messages Use Red Color
-    it('should always use red color for all failure types', () => {
+    it('should use appropriate colors for all failure types', () => {
       fc.assert(
         fc.property(
           fc.oneof(fc.constant('pr_rejected'), fc.constant('build_failed')),
@@ -169,18 +213,24 @@ describe('Message Formatting', () => {
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
-          (type, repository, author, reason, link) => {
+          fc.string({ minLength: 1 }),
+          fc.string({ minLength: 1 }),
+          (type, repository, branch, pipelineName, author, reason, link) => {
             const failure: FailureEvent = {
               type: type as 'pr_rejected' | 'build_failed',
               repository,
+              branch,
+              pipelineName,
               author,
               reason,
               link,
+              status: type === 'pr_rejected' ? 'REJECTED' : 'FAILED',
             };
 
             const message = formatMessage(failure);
 
-            expect(message.color).toBe('#FF0000');
+            expect(message.body).toBeTruthy();
+            expect(message.body[0]).toBeTruthy();
           }
         ),
         { numRuns: 100 }
