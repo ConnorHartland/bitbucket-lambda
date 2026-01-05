@@ -34,13 +34,6 @@ Automated deployment pipeline documentation:
 - Environment-specific deployments
 - Artifact management and rollback procedures
 
-### [Monitoring Guide](MONITORING.md)
-CloudWatch monitoring and alerting setup:
-- Custom metrics and alarms
-- Log analysis and troubleshooting
-- Performance monitoring
-- Cost optimization strategies
-
 ### [Troubleshooting Guide](TROUBLESHOOTING.md)
 Comprehensive troubleshooting reference:
 - Common issues and solutions
@@ -49,13 +42,6 @@ Comprehensive troubleshooting reference:
 - Recovery procedures
 
 ## Reference Materials
-
-### [Teams Message Examples](TEAMS_MESSAGES.md)
-Visual guide to Teams message formatting:
-- Message card structures and color coding
-- Event-specific message examples
-- JSON payload structures
-- Teams channel setup and configuration
 
 ### [Security Guide](../SECURITY.md)
 Security considerations and best practices:
@@ -86,13 +72,16 @@ Bitbucket → API Gateway → Lambda Function → Teams Channel
 1. **Local Development**:
    ```bash
    # Install dependencies
-   pip install -r requirements-test.txt
+   npm install
    
    # Run tests
-   pytest tests/ -v --cov=lambda
+   npm test
    
-   # Validate Terraform
-   terraform fmt -check && terraform validate
+   # Validate TypeScript
+   npm run build
+   
+   # Lint code
+   npm run lint
    ```
 
 2. **Testing**:
@@ -103,7 +92,7 @@ Bitbucket → API Gateway → Lambda Function → Teams Channel
 
 3. **Deployment**:
    - Automated via Bitbucket Pipelines
-   - Manual deployment with Terraform
+   - Manual deployment with AWS CLI
    - Environment-specific configurations
    - Blue-green deployment support
 

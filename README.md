@@ -272,35 +272,41 @@ fields @timestamp, event_type, repository
 
 ```bash
 # Install dependencies
-pip install -r requirements-test.txt
+npm install
 
 # Run tests
-pytest tests/ -v --cov=lambda
+npm test
+
+# Run tests with coverage
+npm test -- --coverage
 
 # Run property-based tests
-pytest tests/ -k "property" -v
+npm test -- --testNamePattern="Property"
 
-# Validate Terraform
-terraform fmt -check
-terraform validate
-tflint
+# Validate TypeScript
+npm run build
+
+# Lint code
+npm run lint
 ```
 
 ### Adding New Event Types
 
-1. **Update event parsing** in `lambda/lambda_function.py`:
-   ```python
-   def parse_bitbucket_event(body, event_type):
-       # Add new event type handling
+1. **Update event parsing** in `src/eventParser.ts`:
+   ```typescript
+   function _parseNewEvent(eventType: string, payload: Record<string, any>): ParsedEvent {
+       // Add new event type handling
+   }
    ```
 
-2. **Update message formatting**:
-   ```python
-   def format_teams_message(parsed_event):
-       # Add formatting for new event category
+2. **Update message formatting** in `src/teamsFormatter.ts`:
+   ```typescript
+   export function formatTeamsMessage(parsedEvent: ParsedEvent): Record<string, any> {
+       // Add formatting for new event category
+   }
    ```
 
-3. **Add tests** in `tests/`:
+3. **Add tests** in `src/**/*.test.ts`:
    - Unit tests for parsing logic
    - Property tests for message formatting
    - Integration tests for end-to-end flow

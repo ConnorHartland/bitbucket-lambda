@@ -87,14 +87,14 @@ describe('Error Handling', () => {
   describe('handleSignatureVerificationError', () => {
     it('should return 401 status code', () => {
       const error = new SignatureVerificationError('Signature mismatch');
-      const response = handleSignatureVerificationError(error);
+      const response = handleError(error);
 
       expect(response.statusCode).toBe(401);
     });
 
     it('should return "Unauthorized" message', () => {
       const error = new SignatureVerificationError('Signature mismatch');
-      const response = handleSignatureVerificationError(error);
+      const response = handleError(error);
 
       const body = JSON.parse(response.body);
       expect(body.message).toBe('Unauthorized');
@@ -103,7 +103,7 @@ describe('Error Handling', () => {
     it('should include request ID in response', () => {
       const error = new SignatureVerificationError('Signature mismatch');
       const requestId = 'req-456';
-      const response = handleSignatureVerificationError(error, requestId);
+      const response = handleError(error, requestId);
 
       const body = JSON.parse(response.body);
       expect(body.requestId).toBe(requestId);
@@ -113,7 +113,7 @@ describe('Error Handling', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (errorMsg: string, requestId: string) => {
           const error = new SignatureVerificationError(errorMsg);
-          const response = handleSignatureVerificationError(error, requestId);
+          const response = handleError(error, requestId);
 
           expect(response.statusCode).toBe(401);
           const body = JSON.parse(response.body);
@@ -127,14 +127,14 @@ describe('Error Handling', () => {
   describe('handleConfigurationError', () => {
     it('should return 500 status code', () => {
       const error = new ConfigurationError('Missing config');
-      const response = handleConfigurationError(error);
+      const response = handleError(error);
 
       expect(response.statusCode).toBe(500);
     });
 
     it('should return "Server configuration error" message', () => {
       const error = new ConfigurationError('Missing config');
-      const response = handleConfigurationError(error);
+      const response = handleError(error);
 
       const body = JSON.parse(response.body);
       expect(body.message).toBe('Server configuration error');
@@ -143,7 +143,7 @@ describe('Error Handling', () => {
     it('should include request ID in response', () => {
       const error = new ConfigurationError('Missing config');
       const requestId = 'req-789';
-      const response = handleConfigurationError(error, requestId);
+      const response = handleError(error, requestId);
 
       const body = JSON.parse(response.body);
       expect(body.requestId).toBe(requestId);
@@ -153,7 +153,7 @@ describe('Error Handling', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (errorMsg: string, requestId: string) => {
           const error = new ConfigurationError(errorMsg);
-          const response = handleConfigurationError(error, requestId);
+          const response = handleError(error, requestId);
 
           expect(response.statusCode).toBe(500);
           const body = JSON.parse(response.body);
@@ -167,14 +167,14 @@ describe('Error Handling', () => {
   describe('handleAwsServiceError', () => {
     it('should return 500 status code', () => {
       const error = new AwsServiceError('AWS error');
-      const response = handleAwsServiceError(error);
+      const response = handleError(error);
 
       expect(response.statusCode).toBe(500);
     });
 
     it('should return "Service configuration error" message', () => {
       const error = new AwsServiceError('AWS error');
-      const response = handleAwsServiceError(error);
+      const response = handleError(error);
 
       const body = JSON.parse(response.body);
       expect(body.message).toBe('Service configuration error');
@@ -183,7 +183,7 @@ describe('Error Handling', () => {
     it('should include request ID in response', () => {
       const error = new AwsServiceError('AWS error');
       const requestId = 'req-aws';
-      const response = handleAwsServiceError(error, requestId);
+      const response = handleError(error, requestId);
 
       const body = JSON.parse(response.body);
       expect(body.requestId).toBe(requestId);
@@ -193,7 +193,7 @@ describe('Error Handling', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (errorMsg: string, requestId: string) => {
           const error = new AwsServiceError(errorMsg);
-          const response = handleAwsServiceError(error, requestId);
+          const response = handleError(error, requestId);
 
           expect(response.statusCode).toBe(500);
           const body = JSON.parse(response.body);
@@ -207,14 +207,14 @@ describe('Error Handling', () => {
   describe('handleNetworkError', () => {
     it('should return 500 status code', () => {
       const error = new NetworkError('Connection failed');
-      const response = handleNetworkError(error);
+      const response = handleError(error);
 
       expect(response.statusCode).toBe(500);
     });
 
     it('should return "Service temporarily unavailable" message', () => {
       const error = new NetworkError('Connection failed');
-      const response = handleNetworkError(error);
+      const response = handleError(error);
 
       const body = JSON.parse(response.body);
       expect(body.message).toBe('Service temporarily unavailable');
@@ -223,7 +223,7 @@ describe('Error Handling', () => {
     it('should include request ID in response', () => {
       const error = new NetworkError('Connection failed');
       const requestId = 'req-net';
-      const response = handleNetworkError(error, requestId);
+      const response = handleError(error, requestId);
 
       const body = JSON.parse(response.body);
       expect(body.requestId).toBe(requestId);
@@ -233,7 +233,7 @@ describe('Error Handling', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (errorMsg: string, requestId: string) => {
           const error = new NetworkError(errorMsg);
-          const response = handleNetworkError(error, requestId);
+          const response = handleError(error, requestId);
 
           expect(response.statusCode).toBe(500);
           const body = JSON.parse(response.body);
@@ -247,14 +247,14 @@ describe('Error Handling', () => {
   describe('handleUnexpectedError', () => {
     it('should return 500 status code', () => {
       const error = new Error('Unexpected error');
-      const response = handleUnexpectedError(error);
+      const response = handleError(error);
 
       expect(response.statusCode).toBe(500);
     });
 
     it('should return "Internal server error" message', () => {
       const error = new Error('Unexpected error');
-      const response = handleUnexpectedError(error);
+      const response = handleError(error);
 
       const body = JSON.parse(response.body);
       expect(body.message).toBe('Internal server error');
@@ -263,7 +263,7 @@ describe('Error Handling', () => {
     it('should include request ID in response', () => {
       const error = new Error('Unexpected error');
       const requestId = 'req-unexpected';
-      const response = handleUnexpectedError(error, requestId);
+      const response = handleError(error, requestId);
 
       const body = JSON.parse(response.body);
       expect(body.requestId).toBe(requestId);
@@ -273,7 +273,7 @@ describe('Error Handling', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (errorMsg: string, requestId: string) => {
           const error = new Error(errorMsg);
-          const response = handleUnexpectedError(error, requestId);
+          const response = handleError(error, requestId);
 
           expect(response.statusCode).toBe(500);
           const body = JSON.parse(response.body);
@@ -500,11 +500,11 @@ describe('Error Handling', () => {
       const requestId = 'req-123';
       const eventType = 'repo:push';
 
-      handleJsonParsingError(error, requestId, eventType);
+      handleError(error, requestId, eventType);
 
       expect(logWithContext).toHaveBeenCalledWith(
         'error',
-        expect.stringContaining('JSON parsing error'),
+        expect.stringContaining('JsonParsingError'),
         requestId,
         eventType,
         expect.any(Object)
