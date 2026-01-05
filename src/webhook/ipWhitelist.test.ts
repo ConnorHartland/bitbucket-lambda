@@ -102,12 +102,14 @@ describe('IP Whitelist Validation', () => {
 
   describe('isIpWhitelisted', () => {
     it('should whitelist known Bitbucket IP ranges', () => {
-      // Test IPs from known Bitbucket ranges
-      expect(isIpWhitelisted('131.103.20.160')).toBe(true);
-      expect(isIpWhitelisted('131.103.20.191')).toBe(true);
-      expect(isIpWhitelisted('131.103.21.1')).toBe(true);
-      expect(isIpWhitelisted('203.119.144.1')).toBe(true);
-      expect(isIpWhitelisted('203.119.240.255')).toBe(true);
+      // Test IPs from the new Bitbucket ranges
+      expect(isIpWhitelisted('104.192.136.0')).toBe(true);
+      expect(isIpWhitelisted('104.192.140.241')).toBe(true);
+      expect(isIpWhitelisted('104.192.143.255')).toBe(true);
+      expect(isIpWhitelisted('185.166.140.0')).toBe(true);
+      expect(isIpWhitelisted('185.166.143.255')).toBe(true);
+      expect(isIpWhitelisted('13.200.41.128')).toBe(true);
+      expect(isIpWhitelisted('13.200.41.255')).toBe(true);
     });
 
     it('should reject non-Bitbucket IP addresses', () => {
@@ -118,14 +120,16 @@ describe('IP Whitelist Validation', () => {
     });
 
     it('should handle edge case IPs at CIDR boundaries', () => {
-      // 131.103.20.160/27 covers 131.103.20.160 to 131.103.20.191
-      expect(isIpWhitelisted('131.103.20.160')).toBe(true); // First IP
-      expect(isIpWhitelisted('131.103.20.191')).toBe(true); // Last IP
-      expect(isIpWhitelisted('131.103.20.159')).toBe(false); // Just before range
-      // 131.103.20.192 is in the next range (131.103.20.192/26), so it's whitelisted
-      expect(isIpWhitelisted('131.103.20.192')).toBe(true); // In next range
-      expect(isIpWhitelisted('131.103.20.255')).toBe(true); // In next range
-      expect(isIpWhitelisted('131.103.19.255')).toBe(false); // Before all ranges
+      // 104.192.136.0/21 covers 104.192.136.0 to 104.192.143.255
+      expect(isIpWhitelisted('104.192.136.0')).toBe(true); // First IP
+      expect(isIpWhitelisted('104.192.143.255')).toBe(true); // Last IP
+      expect(isIpWhitelisted('104.192.135.255')).toBe(false); // Just before range
+      expect(isIpWhitelisted('104.192.144.0')).toBe(false); // Just after range
+      // 185.166.140.0/22 covers 185.166.140.0 to 185.166.143.255
+      expect(isIpWhitelisted('185.166.140.0')).toBe(true); // First IP
+      expect(isIpWhitelisted('185.166.143.255')).toBe(true); // Last IP
+      expect(isIpWhitelisted('185.166.139.255')).toBe(false); // Just before range
+      expect(isIpWhitelisted('185.166.144.0')).toBe(false); // Just after range
     });
 
     it('should handle invalid IP addresses gracefully', () => {
@@ -142,16 +146,16 @@ describe('IP Whitelist Validation', () => {
       fc.assert(
         fc.property(
           fc.tuple(
-            fc.integer({ min: 131, max: 131 }),
-            fc.integer({ min: 103, max: 103 }),
-            fc.integer({ min: 20, max: 127 }),
+            fc.integer({ min: 104, max: 104 }),
+            fc.integer({ min: 192, max: 192 }),
+            fc.integer({ min: 136, max: 143 }),
             fc.integer({ min: 0, max: 255 })
           ),
           ([octet1, octet2, octet3, octet4]) => {
             const ip = `${octet1}.${octet2}.${octet3}.${octet4}`;
-            // Any IP in the 131.103.x.x range should be whitelisted
+            // Any IP in the 104.192.136.0/21 range should be whitelisted
             const result = isIpWhitelisted(ip);
-            expect(typeof result).toBe('boolean');
+            expect(result).toBe(true);
           }
         ),
         { numRuns: 100 }
@@ -170,7 +174,9 @@ describe('IP Whitelist Validation', () => {
           ),
           ([octet1, octet2, octet3, octet4]) => {
             // Skip known Bitbucket ranges
-            if (octet1 === 131 || octet1 === 203) {
+            if ((octet1 === 104 && octet2 === 192 && octet3 >= 136 && octet3 <= 143) ||
+                (octet1 === 185 && octet2 === 166 && octet3 >= 140 && octet3 <= 143) ||
+                (octet1 === 13 && octet2 === 200 && octet3 === 41 && octet4 >= 128)) {
               return; // Skip this case
             }
 

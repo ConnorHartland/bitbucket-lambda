@@ -16,7 +16,7 @@ import { ConfigManager } from './config';
 import { Logger } from './logger';
 import { getSecret } from './secrets';
 import { extractWebhookData, parseWebhookBody } from './webhook/reception';
-import { extractSourceIp, isIpWhitelisted } from './webhook/ipWhitelist';
+import { extractSourceIp, isIpWhitelisted, setIpRanges } from './webhook/ipWhitelist';
 import { verifySignature } from './webhook/signature';
 import { detectFailure } from './webhook/failureDetector';
 import { formatMessage } from './webhook/formatter';
@@ -43,6 +43,8 @@ export async function handler(
     let config;
     try {
       config = ConfigManager.loadFromEnvironment();
+      // Set IP ranges from configuration
+      setIpRanges(config.bitbucketIpRanges);
     } catch (error) {
       logger.error('Failed to load configuration', {
         error: error instanceof Error ? error.message : String(error),

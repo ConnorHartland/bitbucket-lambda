@@ -23,9 +23,11 @@ describe('TypeScript Interfaces', () => {
       teamsWebhookUrlSecretArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-webhook',
       bitbucketSecretArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret',
       ipRestrictionEnabled: true,
+      bitbucketIpRanges: ['104.192.136.0/21', '185.166.140.0/22', '13.200.41.128/25'],
     };
 
     expect(config.ipRestrictionEnabled).toBe(true);
+    expect(config.bitbucketIpRanges).toHaveLength(3);
   });
 
   it('should allow creating a TeamsMessage', () => {

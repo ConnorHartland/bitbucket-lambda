@@ -20,6 +20,7 @@ export interface Config {
   teamsWebhookUrlSecretArn: string;
   bitbucketSecretArn: string;
   ipRestrictionEnabled: boolean;
+  bitbucketIpRanges: string[];
 }
 
 /**

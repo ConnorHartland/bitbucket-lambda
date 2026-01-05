@@ -6,28 +6,21 @@
 import { APIGatewayProxyEvent } from '../types';
 
 /**
- * Bitbucket IP ranges as of 2024
- * Source: https://confluence.atlassian.com/bitbucket/manage-webhooks-735643732.html
- * These are the known Bitbucket Cloud IP ranges
+ * Bitbucket IP ranges - will be set from configuration
  */
-const BITBUCKET_IP_RANGES = [
-  '131.103.20.160/27',
-  '131.103.20.192/26',
-  '131.103.21.0/24',
-  '131.103.22.0/23',
-  '131.103.24.0/21',
-  '131.103.32.0/20',
-  '131.103.48.0/20',
-  '131.103.64.0/18',
-  '131.103.128.0/17',
-  '203.119.144.0/20',
-  '203.119.160.0/20',
-  '203.119.176.0/20',
-  '203.119.192.0/20',
-  '203.119.208.0/20',
-  '203.119.224.0/20',
-  '203.119.240.0/20',
+let BITBUCKET_IP_RANGES: string[] = [
+  '104.192.136.0/21',
+  '185.166.140.0/22',
+  '13.200.41.128/25',
 ];
+
+/**
+ * Set the IP ranges to use for validation
+ * @param ranges Array of CIDR ranges
+ */
+export function setIpRanges(ranges: string[]): void {
+  BITBUCKET_IP_RANGES = ranges;
+}
 
 /**
  * Convert an IP address string to a 32-bit integer
