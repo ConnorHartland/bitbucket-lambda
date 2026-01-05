@@ -396,34 +396,11 @@ describe('Error Handling', () => {
       expect(body.statusCode).toBe(400);
     });
 
-    it('should include timestamp in response', () => {
-      const response = createErrorResponse(400, 'Bad request');
-
-      const body = JSON.parse(response.body);
-      expect(body.timestamp).toBeDefined();
-      expect(typeof body.timestamp).toBe('string');
-    });
-
     it('should include request ID if provided', () => {
       const response = createErrorResponse(400, 'Bad request', 'req-123');
 
       const body = JSON.parse(response.body);
       expect(body.requestId).toBe('req-123');
-    });
-
-    it('should include event type if provided', () => {
-      const response = createErrorResponse(400, 'Bad request', undefined, 'repo:push');
-
-      const body = JSON.parse(response.body);
-      expect(body.eventType).toBe('repo:push');
-    });
-
-    it('should include both request ID and event type if provided', () => {
-      const response = createErrorResponse(400, 'Bad request', 'req-123', 'repo:push');
-
-      const body = JSON.parse(response.body);
-      expect(body.requestId).toBe('req-123');
-      expect(body.eventType).toBe('repo:push');
     });
   });
 

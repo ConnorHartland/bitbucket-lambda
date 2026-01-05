@@ -7,29 +7,21 @@ export class Configuration {
   teamsWebhookUrlSecretArn: string;
   bitbucketSecretArn: string;
   bitbucketIpsSecretArn: string;
-  eventFilter: string;
-  filterMode: string;
 
   constructor(
     teamsWebhookUrlSecretArn: string,
     bitbucketSecretArn: string,
-    bitbucketIpsSecretArn: string,
-    eventFilter: string = '',
-    filterMode: string = 'all'
+    bitbucketIpsSecretArn: string
   ) {
     this.teamsWebhookUrlSecretArn = teamsWebhookUrlSecretArn;
     this.bitbucketSecretArn = bitbucketSecretArn;
     this.bitbucketIpsSecretArn = bitbucketIpsSecretArn;
-    this.eventFilter = eventFilter;
-    this.filterMode = filterMode;
   }
 
   static loadFromEnvironment(): Configuration {
     const teamsWebhookUrlSecretArn = process.env.TEAMS_WEBHOOK_URL_SECRET_ARN;
     const bitbucketSecretArn = process.env.BITBUCKET_SECRET_ARN;
     const bitbucketIpsSecretArn = process.env.BITBUCKET_IPS_SECRET_ARN;
-    const eventFilter = process.env.EVENT_FILTER || '';
-    const filterMode = process.env.FILTER_MODE || 'all';
 
     if (!teamsWebhookUrlSecretArn) {
       throw new Error(
@@ -49,65 +41,58 @@ export class Configuration {
       );
     }
 
-    const validFilterModes = ['all', 'deployments', 'failures', 'explicit'];
-    if (!validFilterModes.includes(filterMode)) {
-      throw new Error(
-        `Configuration error: FILTER_MODE must be one of ${validFilterModes.join(', ')}, got '${filterMode}'`
-      );
-    }
-
-    return new Configuration(teamsWebhookUrlSecretArn, bitbucketSecretArn, bitbucketIpsSecretArn, eventFilter, filterMode);
+    return new Configuration(teamsWebhookUrlSecretArn, bitbucketSecretArn, bitbucketIpsSecretArn);
   }
 }
 
 export class FilterConfig {
-  mode: string;
-  eventTypes: string[];
+  /**
+   * Simplified FilterConfig that only detects failure events
+   * Supports: PR declined (pullrequest:rejected) and build failed (repo:commit_status_updated/created with state=FAILED)
+   * Requirements: 3.1, 3.2, 3.3
+   */
 
-  constructor(mode: string, eventTypes: string[] = []) {
-    this.mode = mode;
-    this.eventTypes = eventTypes;
+  static fromEnvironment(): FilterConfig {
+    // Simplified: always use 'failures' mode
+    return new FilterConfig();
   }
 
-  static fromEnvironment(eventFilter: string, filterMode: string): FilterConfig {
-    const eventTypes = eventFilter
-      .split(',')
-      .map((e) => e.trim())
-      .filter((e) => e.length > 0);
-
-    return new FilterConfig(filterMode, eventTypes);
-  }
-
+  /**
+   * Determines if an event should be processed based on failure detection
+   * Requirements: 3.1, 3.2, 3.3
+   *
+   * @param eventType - The Bitbucket event type
+   * @param eventData - The event payload
+   * @returns true if the event is a failure event, false otherwise
+   */
   shouldProcess(eventType: string, eventData: Record<string, any>): boolean {
-    switch (this.mode) {
-      case 'all':
-        return true;
-      case 'deployments':
-        return this.isDeploymentEvent(eventType);
-      case 'failures':
-        return this.isFailureEvent(eventType, eventData);
-      case 'explicit':
-        return this.eventTypes.includes(eventType);
-      default:
-        return false;
-    }
+    return this.isFailureEvent(eventType, eventData);
   }
 
-  private isDeploymentEvent(eventType: string): boolean {
-    return [
-      'repo:commit_status_updated',
-      'repo:commit_status_created',
-      'pullrequest:approved',
-      'pullrequest:unapproved'
-    ].includes(eventType);
-  }
-
+  /**
+   * Detects if an event is a failure event
+   * Supports:
+   * - Pull request declined: pullrequest:rejected
+   * - Commit status failed: repo:commit_status_updated or repo:commit_status_created with state=FAILED
+   * Requirements: 3.1, 3.2
+   *
+   * @param eventType - The Bitbucket event type
+   * @param eventData - The event payload
+   * @returns true if the event is a failure event, false otherwise
+   */
   private isFailureEvent(eventType: string, eventData: Record<string, any>): boolean {
+    // Check for PR declined
+    if (eventType === 'pullrequest:rejected') {
+      return true;
+    }
+
+    // Check for commit status failed
     if (eventType === 'repo:commit_status_updated' || eventType === 'repo:commit_status_created') {
       const state = eventData?.commit_status?.state;
-      return state === 'FAILED' || state === 'STOPPED';
+      return state === 'FAILED';
     }
 
-    return eventType === 'pullrequest:rejected';
+    // All other events are not failures
+    return false;
   }
 }

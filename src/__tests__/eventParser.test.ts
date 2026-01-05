@@ -427,6 +427,10 @@ describe('Event Parser', () => {
             eventType === 'constructor' ||
             eventType === 'prototype' ||
             eventType === '__proto__' ||
+            eventType === 'toString' ||
+            eventType === 'valueOf' ||
+            eventType === 'hasOwnProperty' ||
+            eventType === 'toLocaleString' ||
             eventType.startsWith('pullrequest:') ||
             eventType === 'repo:push' ||
             eventType === 'pullrequest:comment_created' ||

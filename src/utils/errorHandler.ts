@@ -15,8 +15,6 @@ export interface ErrorResponse {
   statusCode: number;
   message: string;
   requestId?: string;
-  eventType?: string;
-  timestamp?: string;
 }
 
 // Custom error classes
@@ -85,21 +83,18 @@ function handleTypedError(
   }
 
   logWithContext('error', `${error.name}: ${error.message}`, requestId, eventType, context);
-  return createErrorResponse(handler.statusCode, handler.message, requestId, eventType);
+  return createErrorResponse(handler.statusCode, handler.message, requestId);
 }
 
 export function createErrorResponse(
   statusCode: number,
   message: string,
-  requestId?: string,
-  eventType?: string
+  requestId?: string
 ): APIGatewayProxyResult {
   const errorResponse: ErrorResponse = {
     statusCode,
     message,
-    timestamp: new Date().toISOString(),
-    ...(requestId && { requestId }),
-    ...(eventType && { eventType })
+    ...(requestId && { requestId })
   };
 
   return {
@@ -127,7 +122,7 @@ export function handleError(
       errorType: 'AwsServiceError',
       errorCode: (error as any).Code
     });
-    return createErrorResponse(500, 'Service configuration error', requestId, eventType);
+    return createErrorResponse(500, 'Service configuration error', requestId);
   }
 
   // Check for network errors by message patterns
@@ -136,7 +131,7 @@ export function handleError(
     logWithContext('error', `Network error: ${error.message}`, requestId, eventType, {
       errorType: 'NetworkError'
     });
-    return createErrorResponse(500, 'Service temporarily unavailable', requestId, eventType);
+    return createErrorResponse(500, 'Service temporarily unavailable', requestId);
   }
 
   // Default to unexpected error
@@ -144,7 +139,7 @@ export function handleError(
     errorType: error.name || 'UnexpectedError',
     stack: error.stack
   });
-  return createErrorResponse(500, 'Internal server error', requestId, eventType);
+  return createErrorResponse(500, 'Internal server error', requestId);
 }
 
 /**

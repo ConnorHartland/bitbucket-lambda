@@ -11,8 +11,6 @@ process.env.BITBUCKET_SECRET_ARN =
   'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
 process.env.BITBUCKET_IPS_SECRET_ARN =
   'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips';
-process.env.FILTER_MODE = 'all';
-process.env.EVENT_FILTER = '';
 
 import { handler } from '../index';
 import { computeSignature } from '../webhook/signature';
@@ -87,9 +85,9 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
     }
   });
 
-  describe('13.1 End-to-end test for pull request created flow', () => {
-    it('should process a valid pull request created event and post to Teams', async () => {
-      // Create realistic PR event payload
+  describe('13.1 End-to-end test for pull request declined flow', () => {
+    it('should process a valid pull request declined event and post to Teams', async () => {
+      // Create realistic PR declined event payload
       const prPayload = {
         pullrequest: {
           id: 123,
@@ -99,6 +97,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
             display_name: 'John Doe',
             email_address: 'john@example.com'
           },
+          reason: 'Code review failed',
           source: {
             branch: {
               name: 'feature/new-feature'
@@ -109,7 +108,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
               name: 'main'
             }
           },
-          state: 'OPEN',
+          state: 'DECLINED',
           links: {
             html: {
               href: 'https://bitbucket.org/repo/pull-requests/123'
@@ -128,7 +127,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       // Create API Gateway event
       const event = createEventWithIp(
         {
-          'X-Event-Key': 'pullrequest:created',
+          'X-Event-Key': 'pullrequest:rejected',
           'X-Hub-Signature': `sha256=${signature}`,
           'Content-Type': 'application/json'
         },
@@ -150,9 +149,6 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const responseBody = JSON.parse(response.body);
       expect(responseBody.message).toBe('Webhook processed successfully');
       expect(responseBody.requestId).toBe('test-request-123');
-      expect(responseBody.eventType).toBe('pullrequest:created');
-      expect(responseBody.eventCategory).toBe('pull_request');
-      expect(responseBody.processingDurationMs).toBeGreaterThanOrEqual(0);
 
       // Verify Teams was called
       expect(global.fetch).toHaveBeenCalledWith(
@@ -176,6 +172,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
             display_name: 'Jane Smith',
             email_address: 'jane@example.com'
           },
+          reason: 'Needs more testing',
           source: {
             branch: {
               name: 'bugfix/critical'
@@ -186,7 +183,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
               name: 'main'
             }
           },
-          state: 'OPEN',
+          state: 'DECLINED',
           links: {
             html: {
               href: 'https://bitbucket.org/repo/pull-requests/456'
@@ -204,7 +201,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
 
       const event = createEventWithIp(
         {
-          'X-Event-Key': 'pullrequest:created',
+          'X-Event-Key': 'pullrequest:rejected',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
@@ -231,55 +228,37 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
     });
   });
 
-  describe('13.2 End-to-end test for push event flow', () => {
-    it('should process a valid push event and post to Teams', async () => {
-      // Create realistic push event payload
-      const pushPayload = {
-        push: {
-          changes: [
-            {
-              new: {
-                name: 'main'
-              },
-              commits: [
-                {
-                  hash: 'abc123def456',
-                  message: 'Add new feature',
-                  author: {
-                    user: {
-                      display_name: 'John Doe'
-                    }
-                  },
-                  links: {
-                    html: {
-                      href: 'https://bitbucket.org/repo/commits/abc123def456'
-                    }
-                  }
-                }
-              ]
-            }
-          ]
+  describe('13.2 End-to-end test for commit status failed flow', () => {
+    it('should process a valid commit status failed event and post to Teams', async () => {
+      // Create realistic commit status failed event payload
+      const commitStatusPayload = {
+        commit_status: {
+          name: 'Build',
+          state: 'FAILED',
+          url: 'https://ci.example.com/build/123',
+          commit: {
+            hash: 'abc123def456'
+          }
         },
-        actor: {
-          display_name: 'John Doe',
-          email_address: 'john@example.com'
+        branch: {
+          name: 'main'
         },
         repository: {
           full_name: 'myorg/myrepo'
         }
       };
 
-      const body = JSON.stringify(pushPayload);
+      const body = JSON.stringify(commitStatusPayload);
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
       const event = createEventWithIp(
         {
-          'X-Event-Key': 'repo:push',
+          'X-Event-Key': 'repo:commit_status_updated',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        'test-request-push-1'
+        'test-request-build-1'
       );
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -292,8 +271,6 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       expect(response.statusCode).toBe(200);
       const responseBody = JSON.parse(response.body);
       expect(responseBody.message).toBe('Webhook processed successfully');
-      expect(responseBody.eventType).toBe('repo:push');
-      expect(responseBody.eventCategory).toBe('push');
 
       // Verify Teams was called
       expect(global.fetch).toHaveBeenCalledWith(
@@ -302,67 +279,35 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       );
     });
 
-    it('should include push details in Teams message', async () => {
-      const pushPayload = {
-        push: {
-          changes: [
-            {
-              new: {
-                name: 'develop'
-              },
-              commits: [
-                {
-                  hash: 'xyz789abc123',
-                  message: 'Update dependencies',
-                  author: {
-                    user: {
-                      display_name: 'Jane Smith'
-                    }
-                  },
-                  links: {
-                    html: {
-                      href: 'https://bitbucket.org/repo/commits/xyz789abc123'
-                    }
-                  }
-                },
-                {
-                  hash: 'def456ghi789',
-                  message: 'Fix tests',
-                  author: {
-                    user: {
-                      display_name: 'Jane Smith'
-                    }
-                  },
-                  links: {
-                    html: {
-                      href: 'https://bitbucket.org/repo/commits/def456ghi789'
-                    }
-                  }
-                }
-              ]
-            }
-          ]
+    it('should include build failure details in Teams message', async () => {
+      const commitStatusPayload = {
+        commit_status: {
+          name: 'Unit Tests',
+          state: 'FAILED',
+          url: 'https://ci.example.com/build/456',
+          commit: {
+            hash: 'xyz789abc123'
+          }
         },
-        actor: {
-          display_name: 'Jane Smith',
-          email_address: 'jane@example.com'
+        branch: {
+          name: 'develop'
         },
         repository: {
           full_name: 'myorg/myrepo'
         }
       };
 
-      const body = JSON.stringify(pushPayload);
+      const body = JSON.stringify(commitStatusPayload);
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
       const event = createEventWithIp(
         {
-          'X-Event-Key': 'repo:push',
+          'X-Event-Key': 'repo:commit_status_created',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        'test-request-push-2'
+        'test-request-build-2'
       );
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -379,35 +324,57 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
     });
   });
 
-  describe('13.3 End-to-end test for filtered event', () => {
-    it('should filter out unsupported events', async () => {
-      // Create an unsupported event type
-      const unsupportedPayload = {
+  describe('13.3 End-to-end test for non-failure event', () => {
+    it('should filter out non-failure events', async () => {
+      // Create a non-failure event (PR created, not declined)
+      const prPayload = {
+        pullrequest: {
+          id: 123,
+          title: 'Add new feature',
+          author: {
+            display_name: 'John Doe'
+          },
+          source: {
+            branch: {
+              name: 'feature/new'
+            }
+          },
+          destination: {
+            branch: {
+              name: 'main'
+            }
+          },
+          state: 'OPEN',
+          links: {
+            html: {
+              href: 'https://bitbucket.org/repo/pull-requests/123'
+            }
+          }
+        },
         repository: {
           full_name: 'myorg/myrepo'
         }
       };
 
-      const body = JSON.stringify(unsupportedPayload);
+      const body = JSON.stringify(prPayload);
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
       const event = createEventWithIp(
         {
-          'X-Event-Key': 'repo:unknown_event',
+          'X-Event-Key': 'pullrequest:created',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        'test-request-unsupported'
+        'test-request-non-failure'
       );
 
       const response = await handler(event, {});
 
-      // Verify event was not processed (unsupported)
+      // Verify event was not processed (not a failure)
       expect(response.statusCode).toBe(200);
       const responseBody = JSON.parse(response.body);
-      expect(responseBody.message).toBe('Unsupported event type');
-      expect(responseBody.eventCategory).toBe('unsupported');
+      expect(responseBody.message).toBe('Event processed');
 
       // Verify Teams was NOT called
       expect(global.fetch).not.toHaveBeenCalled();
@@ -557,7 +524,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
 
       const event = createEventWithIp(
         {
-          'X-Event-Key': 'pullrequest:created',
+          'X-Event-Key': 'pullrequest:rejected',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
@@ -572,10 +539,8 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
 
       const response = await handler(event, {});
 
-      // Verify 500 response
-      expect(response.statusCode).toBe(500);
-      const responseBody = JSON.parse(response.body);
-      expect(responseBody.message).toContain('error');
+      // Verify 200 response (graceful error handling)
+      expect(response.statusCode).toBe(200);
 
       // Verify Teams was called
       expect(global.fetch).toHaveBeenCalled();
@@ -617,7 +582,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
 
       const event = createEventWithIp(
         {
-          'X-Event-Key': 'pullrequest:created',
+          'X-Event-Key': 'pullrequest:rejected',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
@@ -631,8 +596,8 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
 
       const response = await handler(event, {});
 
-      // Verify 500 response
-      expect(response.statusCode).toBe(500);
+      // Verify 200 response (graceful error handling)
+      expect(response.statusCode).toBe(200);
 
       // Verify Teams was called
       expect(global.fetch).toHaveBeenCalled();
@@ -674,7 +639,7 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
 
       const event = createEventWithIp(
         {
-          'X-Event-Key': 'pullrequest:created',
+          'X-Event-Key': 'pullrequest:rejected',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
@@ -689,8 +654,8 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
 
       const response = await handler(event, {});
 
-      // Verify 500 response
-      expect(response.statusCode).toBe(500);
+      // Verify 200 response (graceful error handling)
+      expect(response.statusCode).toBe(200);
 
       // Verify Teams was called
       expect(global.fetch).toHaveBeenCalled();

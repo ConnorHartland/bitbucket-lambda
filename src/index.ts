@@ -1,7 +1,7 @@
 /**
  * Lambda Handler - Main Entry Point
  * Orchestrates the complete webhook processing pipeline
- * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 5.5, 5.6, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 12.9, 12.10
+ * Requirements: 1.1, 1.2, 1.6, 1.7, 3.3, 5.1
  */
 
 import { Configuration, FilterConfig } from './config';
@@ -9,17 +9,15 @@ import { extractWebhookEvent, getRequestId, APIGatewayProxyEvent } from './webho
 import { validateWebhookSignature } from './webhook/signature';
 import { retrieveWebhookSecret, retrieveTeamsUrl } from './aws/secrets';
 import { validateSourceIp } from './webhook/ipRestriction';
-import { parse as parseEvent } from './webhook/parser';
-import { formatTeamsMessage } from './teams/formatter';
+import { formatMessage, FailureEvent } from './teams/formatter';
 import { postToTeams } from './teams/client';
 import { handleError, validateJsonPayload, APIGatewayProxyResult, SignatureVerificationError } from './utils/errorHandler';
 import { logger } from './utils/logging';
-import { emitEventTypeMetric, emitSignatureFailure, emitUnsupportedEvent, emitProcessingDuration } from './aws/metrics';
 
 /**
- * Module-level configuration and filter config
+ * Module-level configuration
  * Loaded on initialization and reused across invocations
- * Requirements: 12.3, 12.4, 12.5
+ * Requirements: 6.1, 6.2, 6.5
  */
 let config: Configuration | null = null;
 let filterConfig: FilterConfig | null = null;
@@ -28,12 +26,12 @@ let initializationError: Error | null = null;
 /**
  * Initialize configuration on module load
  * Fails fast if configuration is missing
- * Requirements: 12.3, 12.4, 12.5
+ * Requirements: 6.1, 6.2, 6.5
  */
 function initializeConfiguration(): void {
   try {
     config = Configuration.loadFromEnvironment();
-    filterConfig = FilterConfig.fromEnvironment(config.eventFilter, config.filterMode);
+    filterConfig = new FilterConfig();
     logger.info('Configuration loaded successfully');
   } catch (error) {
     initializationError = error as Error;
@@ -47,7 +45,7 @@ initializeConfiguration();
 /**
  * Lambda handler function
  * Orchestrates the complete webhook processing pipeline
- * Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 12.9, 12.10
+ * Requirements: 1.1, 1.2, 1.6, 1.7, 3.3, 5.1
  *
  * @param event - API Gateway proxy event
  * @param context - Lambda context
@@ -57,13 +55,11 @@ export const handler = async (
   event: APIGatewayProxyEvent,
   _context: any
 ): Promise<APIGatewayProxyResult> => {
-  const startTime = Date.now();
   const requestId = getRequestId(event);
   let eventType = 'unknown';
-  let eventCategory = 'unknown';
 
   try {
-    // Requirement 12.4, 12.5: Fail fast if configuration is not loaded
+    // Requirement 6.1, 6.2, 6.5: Fail fast if configuration is not loaded
     if (initializationError) {
       logger.error(
         `Configuration initialization failed: ${initializationError.message}`,
@@ -84,12 +80,11 @@ export const handler = async (
     if (!ipValidation.isValid) {
       logger.warn(`IP validation failed: ${ipValidation.reason}`, requestId);
       return {
-        statusCode: 403,
+        statusCode: 200,
         body: JSON.stringify({
-          statusCode: 403,
+          statusCode: 200,
           message: 'Access denied',
-          requestId,
-          reason: ipValidation.reason
+          requestId
         })
       };
     }
@@ -123,106 +118,110 @@ export const handler = async (
 
     if (!isValid) {
       logger.error(`Signature verification failed: ${signatureError}`, requestId, eventType);
-      emitSignatureFailure();
       throw new SignatureVerificationError(signatureError || 'Signature verification failed');
     }
 
     logger.info('Signature verified successfully', requestId, eventType);
 
-    // Requirement 11.1: Emit metric for event type
-    emitEventTypeMetric(eventType);
-
-    // Requirement 5.5, 5.6: Filter events
-    logger.info('Filtering event', requestId, eventType);
+    // Requirement 3.3: Filter events - only process failures
+    logger.info('Checking if event is a failure', requestId, eventType);
     const shouldProcess = filterConfig.shouldProcess(eventType, payload);
 
     if (!shouldProcess) {
-      logger.info('Event filtered out', requestId, eventType);
-      const durationMs = Date.now() - startTime;
-      emitProcessingDuration(durationMs);
-
+      logger.info('Event is not a failure, ignoring', requestId, eventType);
       return {
         statusCode: 200,
         body: JSON.stringify({
           statusCode: 200,
-          message: 'Event filtered',
-          requestId,
-          eventType,
-          eventCategory: 'filtered',
-          processingDurationMs: durationMs
+          message: 'Event processed',
+          requestId
         })
       };
     }
 
-    // Requirement 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7: Parse events
-    logger.info('Parsing event', requestId, eventType);
-    const parsedEvent = parseEvent(eventType, payload);
+    // Requirement 3.1, 3.2: Extract failure details
+    logger.info('Extracting failure details', requestId, eventType);
+    const failureEvent = extractFailureDetails(eventType, payload);
 
-    if (!parsedEvent) {
-      logger.info('Unsupported event type', requestId, eventType);
-      emitUnsupportedEvent();
-      const durationMs = Date.now() - startTime;
-      emitProcessingDuration(durationMs);
-
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          statusCode: 200,
-          message: 'Unsupported event type',
-          requestId,
-          eventType,
-          eventCategory: 'unsupported',
-          processingDurationMs: durationMs
-        })
-      };
-    }
-
-    eventCategory = parsedEvent.eventCategory;
-    logger.info('Event parsed successfully', requestId, eventType, {
-      eventCategory,
-      repository: parsedEvent.repository
-    });
-
-    // Requirement 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8: Format messages
+    // Requirement 4.1, 4.2, 4.3: Format message
     logger.info('Formatting Teams message', requestId, eventType);
-    const teamsMessage = formatTeamsMessage(parsedEvent);
+    const teamsMessage = formatMessage(failureEvent);
 
-    // Requirement 8.1, 8.2, 8.3, 8.4, 8.5, 8.6: Post to Teams
+    // Requirement 5.1: Post to Teams
     logger.info('Posting to Teams', requestId, eventType);
     const teamsUrl = await retrieveTeamsUrl(config);
     const postSuccess = await postToTeams(teamsMessage, teamsUrl);
 
     if (!postSuccess) {
       logger.error('Failed to post to Teams', requestId, eventType);
-      const durationMs = Date.now() - startTime;
-      emitProcessingDuration(durationMs);
-
-      return handleError(new Error('Failed to post to Teams'), requestId, eventType);
+      // Requirement 5.3: Return 200 even if Teams posting fails
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          statusCode: 200,
+          message: 'Webhook processed (Teams posting failed)',
+          requestId
+        })
+      };
     }
 
     logger.info('Successfully posted to Teams', requestId, eventType);
 
-    // Requirement 12.6: Track processing duration
-    const durationMs = Date.now() - startTime;
-    emitProcessingDuration(durationMs);
-
-    // Requirement 12.7, 12.8: Return success response with context
+    // Requirement 1.7: Return success response
     return {
       statusCode: 200,
       body: JSON.stringify({
         statusCode: 200,
         message: 'Webhook processed successfully',
-        requestId,
-        eventType,
-        eventCategory,
-        processingDurationMs: durationMs
+        requestId
       })
     };
   } catch (error) {
     logger.error(`Unexpected error: ${(error as Error).message}`, requestId, eventType);
-    const durationMs = Date.now() - startTime;
-    emitProcessingDuration(durationMs);
-
     return handleError(error as Error, requestId, eventType);
   }
 };
+
+/**
+ * Extract failure details from event payload
+ * Requirements: 3.1, 3.2
+ *
+ * @param eventType - The Bitbucket event type
+ * @param payload - The event payload
+ * @returns FailureEvent with extracted details
+ */
+function extractFailureDetails(eventType: string, payload: Record<string, any>): FailureEvent {
+  if (eventType === 'pullrequest:rejected') {
+    const pr = payload.pullrequest;
+    const repository = payload.repository?.full_name || 'unknown';
+    const author = pr?.author?.display_name || 'Unknown';
+    const reason = pr?.reason || 'Pull request declined';
+    const link = pr?.links?.html?.href || '';
+
+    return {
+      type: 'PR Declined',
+      repository,
+      author,
+      reason,
+      link
+    };
+  }
+
+  if (eventType === 'repo:commit_status_updated' || eventType === 'repo:commit_status_created') {
+    const commitStatus = payload.commit_status;
+    const repository = payload.repository?.full_name || 'unknown';
+    const buildName = commitStatus?.name || 'Build';
+    const reason = `${buildName} failed`;
+    const link = commitStatus?.url || '';
+
+    return {
+      type: 'Build Failed',
+      repository,
+      author: 'Build System',
+      reason,
+      link
+    };
+  }
+
+  throw new Error(`Unsupported failure event type: ${eventType}`);
+}

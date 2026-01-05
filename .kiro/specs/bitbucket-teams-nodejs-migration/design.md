@@ -2,11 +2,11 @@
 
 ## Overview
 
-This document describes the design for migrating the Bitbucket Teams webhook Lambda function from Python to Node.js. The system maintains all existing functionality while leveraging Node.js runtime capabilities. The architecture follows a modular design with clear separation of concerns: webhook reception, signature verification, event filtering, event parsing, message formatting, and Teams posting.
+This document describes the design for migrating the Bitbucket Teams webhook Lambda function from Python to Node.js. The system receives Bitbucket webhook events, validates signatures, detects failure events, formats them into rich Teams Adaptive Cards, and posts them to Microsoft Teams. Only failure events are processed; all other events are silently ignored with a 200 response. The architecture is streamlined to focus on failure detection and notification.
 
 ## Architecture
 
-The system follows a pipeline architecture where each component processes the webhook event and passes it to the next stage:
+The system follows a simple pipeline architecture:
 
 ```
 API Gateway Event
@@ -15,18 +15,18 @@ API Gateway Event
     ↓
 [Signature Verification] - Validate HMAC-SHA256 signature
     ↓
-[Configuration Loading] - Load secrets and filter config
+[Configuration Loading] - Load secrets
     ↓
-[Event Filtering] - Filter events based on configuration
+[Failure Detection] - Check if event is a failure
     ↓
-[Event Parsing] - Parse Bitbucket event into internal format
-    ↓
-[Message Formatting] - Format parsed event for Teams
+[Message Formatting] - Format failure into Adaptive Card
     ↓
 [Teams Posting] - Post message to Teams Workflow
     ↓
-API Gateway Response
+API Gateway Response (200)
 ```
+
+**Key Design Decision**: All non-failure events and errors return 200 OK to prevent webhook retries. Only configuration errors during initialization cause the Lambda to fail.
 
 ## Components and Interfaces
 
@@ -44,17 +44,12 @@ async function handler(event: APIGatewayProxyEvent, context: Context): Promise<A
 - Extract headers and body from API Gateway event
 - Handle base64 decoding if needed
 - Orchestrate the processing pipeline
-- Handle errors and return appropriate HTTP responses
-- Track processing duration
-- Emit metrics
+- Return 200 for all webhook requests (success or ignored)
+- Log processing with context
 
 **Error Handling**:
-- Configuration errors → 500 with "Server configuration error"
-- JSON parsing errors → 400 with "Invalid JSON payload"
-- Signature verification failures → 401 with "Unauthorized"
-- AWS service errors → 500 with "Service configuration error"
-- Network errors → 500 with "Service temporarily unavailable"
-- Unexpected errors → 500 with "Internal server error"
+- Configuration errors → Fail fast during initialization
+- All webhook processing errors → Log and return 200
 
 ### 2. Configuration Manager (`config.ts`)
 
@@ -65,33 +60,15 @@ async function handler(event: APIGatewayProxyEvent, context: Context): Promise<A
 class Configuration {
   teamsWebhookUrlSecretArn: string;
   bitbucketSecretArn: string;
-  eventFilter: string;
-  filterMode: string;
   
   static loadFromEnvironment(): Configuration
-}
-
-class FilterConfig {
-  mode: string;
-  eventTypes: string[];
-  
-  static fromEnvironment(eventFilter: string, filterMode: string): FilterConfig
-  shouldProcess(eventType: string, eventData: object): boolean
 }
 ```
 
 **Validation Rules**:
 - TEAMS_WEBHOOK_URL_SECRET_ARN is required
 - BITBUCKET_SECRET_ARN is required
-- EVENT_FILTER is optional (defaults to empty string)
-- FILTER_MODE is optional (defaults to 'all')
 - Fail fast if required variables are missing
-
-**Filter Modes**:
-- `all`: Process all event types
-- `deployments`: Only process deployment-related events (commit status, approvals)
-- `failures`: Only process failure events (failed builds, declined PRs)
-- `explicit`: Only process event types listed in EVENT_FILTER
 
 ### 3. Signature Verifier (`signature.ts`)
 
@@ -134,63 +111,54 @@ function retrieveTeamsUrl(config: Configuration): Promise<string>
 - Reduce AWS API calls on subsequent invocations
 - Cache key is the secret ARN
 
-**Error Handling**:
-- Log AWS error codes and messages
-- Throw exceptions for caller to handle
+### 5. Failure Detector (`failureDetector.ts`)
 
-### 5. Event Parser (`eventParser.ts`)
-
-**Responsibility**: Parse Bitbucket webhook events into internal format
-
-**Data Structure**:
-```typescript
-interface ParsedEvent {
-  eventCategory: string;  // 'pull_request', 'push', 'comment', 'commit_status'
-  repository: string;
-  action: string;
-  author: string;
-  title: string | null;
-  description: string | null;
-  url: string;
-  metadata: Record<string, any>;
-}
-```
-
-**Supported Event Types**:
-- Pull Request: `pullrequest:created`, `pullrequest:updated`, `pullrequest:fulfilled`, `pullrequest:rejected`, `pullrequest:approved`, `pullrequest:unapproved`
-- Push: `repo:push`
-- Comments: `pullrequest:comment_created`, `repo:commit_comment_created`
-- Commit Status: `repo:commit_status_updated`, `repo:commit_status_created`
-
-**Parsing Logic**:
-- Extract repository name from payload
-- Route to appropriate parser based on event type
-- Extract event-specific fields into metadata
-- Return null for unsupported event types
-- Raise ValueError for malformed payloads
-
-### 6. Message Formatter (`teamsFormatter.ts`)
-
-**Responsibility**: Format parsed events into Teams Adaptive Card data
+**Responsibility**: Detect if a webhook event is a failure event
 
 **Interface**:
 ```typescript
-function getEventColor(eventCategory: string, action: string, metadata: Record<string, any>): string
+interface FailureEvent {
+  type: string;  // 'pr_declined', 'build_failed', 'deployment_failed'
+  repository: string;
+  author: string;
+  authorEmail?: string;
+  title: string;
+  reason: string;
+  link: string;
+  timestamp: string;
+}
 
-function createMentionEntity(email: string, displayName: string): MentionEntity | null
+function isFailureEvent(eventType: string, payload: any): boolean
 
-function createAdaptiveCardData(parsedEvent: ParsedEvent): Record<string, any>
-
-function formatTeamsMessage(parsedEvent: ParsedEvent): Record<string, any>
+function parseFailureEvent(eventType: string, payload: any): FailureEvent | null
 ```
 
-**Color Scheme**:
-- Red (#DC3545): Failures, declined PRs, stopped builds
-- Green (#28A745): Merged PRs, successful builds
-- Blue (#0078D4): Pull request events
-- Purple (#6264A7): Push events
-- Yellow (#FFC107): In-progress builds
-- Gray (#6C757D): Comments and other events
+**Supported Failure Events**:
+- Pull Request Declined: `pullrequest:rejected`
+- Commit Status Failed: `repo:commit_status_updated` with state='failed'
+- Build Failure: Custom Bitbucket Pipelines failure events
+
+**Parsing Logic**:
+- Check event type and payload for failure indicators
+- Extract failure details (repository, author, reason, link)
+- Return null if not a failure event
+
+### 6. Message Formatter (`teamsFormatter.ts`)
+
+**Responsibility**: Format failure events into Teams Adaptive Card data
+
+**Interface**:
+```typescript
+function formatFailureMessage(failureEvent: FailureEvent): Record<string, any>
+```
+
+**Adaptive Card Structure**:
+- Title: Failure type and repository
+- Description: Failure reason and context
+- Author mention: If email available
+- Link: Direct link to failure in Bitbucket
+- Color: Red (#DC3545) for all failures
+- Timestamp: When failure occurred
 
 **Mention Entities**:
 - Create mention entities for author email when available
@@ -203,7 +171,7 @@ function formatTeamsMessage(parsedEvent: ParsedEvent): Record<string, any>
 
 **Interface**:
 ```typescript
-function postToTeams(eventData: Record<string, any>, webhookUrl: string): Promise<boolean>
+function postToTeams(messageData: Record<string, any>, webhookUrl: string): Promise<boolean>
 ```
 
 **HTTP Configuration**:
@@ -211,7 +179,7 @@ function postToTeams(eventData: Record<string, any>, webhookUrl: string): Promis
 - Headers: Content-Type: application/json
 - Timeout: 10 seconds
 - Success: Status 200 or 202
-- Failure: Any other status
+- Failure: Any other status (logged but doesn't fail webhook)
 
 **Error Handling**:
 - Log response status and body on failure
@@ -232,49 +200,13 @@ function logWithContext(level: string, message: string, requestId?: string, even
 **Sanitization Patterns**:
 - Webhook signatures: `sha256=[a-f0-9]{64}`
 - Bearer tokens: `Bearer [A-Za-z0-9\-._~+/]+=*`
-- Passwords: `password["\']?\s*[:=]\s*["\']?[^"\'\s]+`
 - Secrets: `secret["\']?\s*[:=]\s*["\']?[^"\'\s]+`
-- Tokens: `token["\']?\s*[:=]\s*["\']?[^"\'\s]+`
 
 **Context Fields**:
 - request_id: AWS request ID for correlation
 - event_type: Bitbucket event type
 - repository: Repository name
-- action: Event action
 - Additional key-value pairs as needed
-
-### 9. Metrics Emitter (`metrics.ts`)
-
-**Responsibility**: Emit custom metrics to CloudWatch using EMF
-
-**Interface**:
-```typescript
-class CustomMetrics {
-  static emitMetric(metricName: string, value?: number, unit?: string, namespace?: string, dimensions?: Record<string, string>): void
-  
-  static emitEventTypeMetric(eventType: string): void
-  
-  static emitSignatureFailure(): void
-  
-  static emitTeamsAPIFailure(): void
-  
-  static emitUnsupportedEvent(): void
-  
-  static emitProcessingDuration(durationMs: number): void
-}
-```
-
-**Metric Format**: CloudWatch Embedded Metric Format (EMF)
-- Namespace: `BitbucketTeamsWebhook`
-- Dimensions: Event type, error type, etc.
-- Units: Count, Milliseconds
-
-**Metrics Emitted**:
-- EventType-{eventType}: Count of each event type
-- SignatureVerificationFailures: Count of signature failures
-- TeamsAPIFailures: Count of Teams API failures
-- UnsupportedEventTypes: Count of unsupported events
-- ProcessingDuration: Processing time in milliseconds
 
 ## Data Models
 
@@ -298,40 +230,45 @@ interface APIGatewayProxyResult {
 }
 ```
 
+### Failure Event
+```typescript
+interface FailureEvent {
+  type: string;  // 'pr_declined', 'build_failed', 'deployment_failed'
+  repository: string;
+  author: string;
+  authorEmail?: string;
+  title: string;
+  reason: string;
+  link: string;
+  timestamp: string;
+}
+```
+
 ### Bitbucket Event Structures
 
-**Pull Request Event**:
+**Pull Request Declined Event**:
 ```typescript
 {
   pullrequest: {
     id: number;
     title: string;
-    description: string;
     author: { display_name: string; email_address?: string };
-    source: { branch: { name: string } };
-    destination: { branch: { name: string } };
-    state: string;
+    state: 'DECLINED';
     links: { html: { href: string } };
   };
   repository: { full_name: string };
 }
 ```
 
-**Push Event**:
+**Commit Status Failed Event**:
 ```typescript
 {
-  push: {
-    changes: [{
-      new: { name: string };
-      commits: [{
-        hash: string;
-        message: string;
-        author: { user: { display_name: string } };
-        links: { html: { href: string } };
-      }];
-    }];
+  commit_status: {
+    state: 'FAILED';
+    key: string;  // build name
+    url: string;
+    commit: { hash: string };
   };
-  actor: { display_name: string; email_address?: string };
   repository: { full_name: string };
 }
 ```
@@ -340,7 +277,7 @@ interface APIGatewayProxyResult {
 
 A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.
 
-### Property 1: Webhook Reception Extracts All Required Fields
+### Property 1: Webhook Reception Extracts Required Fields
 *For any* API Gateway proxy event with valid headers and body, the system SHALL extract the event type, signature, and body without loss of information.
 **Validates: Requirements 1.1, 1.2, 1.3**
 
@@ -348,13 +285,13 @@ A property is a characteristic or behavior that should hold true across all vali
 *For any* valid payload, if it is base64 encoded in the event, the system SHALL decode it to produce the original payload.
 **Validates: Requirements 1.4**
 
-### Property 3: Invalid JSON Rejected with 400
-*For any* request body containing invalid JSON, the system SHALL return a 400 status code with an error message.
+### Property 3: Invalid JSON Returns 200
+*For any* request body containing invalid JSON, the system SHALL return a 200 status code and log the error.
 **Validates: Requirements 1.5**
 
-### Property 4: Signature Verification Prevents Invalid Requests
-*For any* request with an invalid signature, the system SHALL return a 401 status code without processing the event further.
-**Validates: Requirements 1.6, 2.3, 2.4**
+### Property 4: Invalid Signature Returns 200
+*For any* request with an invalid signature, the system SHALL return a 200 status code and log the error.
+**Validates: Requirements 1.6**
 
 ### Property 5: HMAC-SHA256 Signature Computation
 *For any* payload and secret, the computed HMAC-SHA256 signature SHALL match the expected signature for that payload and secret.
@@ -366,11 +303,11 @@ A property is a characteristic or behavior that should hold true across all vali
 
 ### Property 7: Configuration Loading from Environment
 *For any* set of environment variables containing required configuration, the system SHALL load all configuration values correctly.
-**Validates: Requirements 3.1, 3.2, 3.3, 3.4**
+**Validates: Requirements 3.1, 3.2**
 
 ### Property 8: Configuration Validation Fails Fast
 *For any* missing required configuration variable, the system SHALL raise an error during initialization without attempting to process events.
-**Validates: Requirements 3.5, 3.6**
+**Validates: Requirements 3.3**
 
 ### Property 9: Secret Retrieval from AWS
 *For any* valid secret ARN, the system SHALL retrieve the secret value from AWS Secrets Manager.
@@ -378,202 +315,118 @@ A property is a characteristic or behavior that should hold true across all vali
 
 ### Property 10: Secret Caching for Warm Invocations
 *For any* secret ARN, the second retrieval of the same secret SHALL use the cached value without calling AWS Secrets Manager again.
-**Validates: Requirements 4.4**
+**Validates: Requirements 4.3**
 
-### Property 11: Filter Mode 'all' Processes All Events
-*For any* event type, when filter mode is 'all', the system SHALL process the event (not filter it out).
+### Property 11: PR Declined Detected as Failure
+*For any* pull request declined event, the failure detector SHALL identify it as a failure event.
 **Validates: Requirements 5.1**
 
-### Property 12: Filter Mode 'deployments' Filters Correctly
-*For any* event type, when filter mode is 'deployments', the system SHALL process only deployment-related events (commit status, approvals).
+### Property 12: Commit Status Failed Detected as Failure
+*For any* commit status event with state='failed', the failure detector SHALL identify it as a failure event.
 **Validates: Requirements 5.2**
 
-### Property 13: Filter Mode 'failures' Filters Correctly
-*For any* event type, when filter mode is 'failures', the system SHALL process only failure events (failed builds, declined PRs).
-**Validates: Requirements 5.3**
-
-### Property 14: Filter Mode 'explicit' Filters Correctly
-*For any* event type and explicit event filter list, when filter mode is 'explicit', the system SHALL process only events in the filter list.
+### Property 13: Non-Failure Events Ignored
+*For any* non-failure event, the system SHALL return a 200 response without posting to Teams.
 **Validates: Requirements 5.4**
 
-### Property 15: Filtered Events Return 200
-*For any* event that is filtered out, the system SHALL return a 200 status code with a message indicating the event was filtered.
+### Property 14: Failure Details Extracted
+*For any* failure event, the failure detector SHALL extract repository, author, title, reason, and link.
 **Validates: Requirements 5.5**
 
-### Property 16: Pull Request Event Parsing
-*For any* valid pull request event, the event parser SHALL extract PR ID, title, author, source branch, target branch, and state.
+### Property 15: Failure Message Includes Required Fields
+*For any* failure event, the message formatter SHALL create output containing title, description, and repository information.
 **Validates: Requirements 6.1**
 
-### Property 17: Push Event Parsing
-*For any* valid push event, the event parser SHALL extract branch name, commit count, and recent commits.
+### Property 16: PR Declined Message Formatting
+*For any* PR declined failure event, the message formatter SHALL include PR ID, title, author, and reason.
 **Validates: Requirements 6.2**
 
-### Property 18: Comment Event Parsing
-*For any* valid comment event, the event parser SHALL extract comment text, author, and context (PR or commit).
+### Property 17: Commit Status Message Formatting
+*For any* commit status failure event, the message formatter SHALL include build name, commit hash, and failure reason.
 **Validates: Requirements 6.3**
 
-### Property 19: Commit Status Event Parsing
-*For any* valid commit status event, the event parser SHALL extract build name, status, and commit hash.
+### Property 18: Failure Messages Use Red Color
+*For any* failure event, the message formatter SHALL assign red theme color (#DC3545).
 **Validates: Requirements 6.4**
 
-### Property 20: Unsupported Event Type Returns Null
-*For any* unsupported event type, the event parser SHALL return null to indicate no processing is needed.
+### Property 19: Mention Entity Creation
+*For any* author with email information, the message formatter SHALL create a mention entity for Teams.
 **Validates: Requirements 6.5**
 
-### Property 21: Malformed Payload Raises Error
-*For any* payload with missing required fields, the event parser SHALL raise an error with a descriptive message.
+### Property 20: Failure Link Included
+*For any* failure event, the message formatter SHALL include a link to the failure event in Bitbucket.
 **Validates: Requirements 6.6**
 
-### Property 22: Author Email Extraction
-*For any* event with author email information, the event parser SHALL extract and include the email in metadata.
-**Validates: Requirements 6.7**
+### Property 21: Teams Posting Success
+*For any* valid failure message and Teams webhook URL, the Teams client SHALL post the data and return true on success (status 200 or 202).
+**Validates: Requirements 7.1, 7.2**
 
-### Property 23: Message Formatting Includes Required Fields
-*For any* parsed event, the message formatter SHALL create output containing title, description, and repository information.
-**Validates: Requirements 7.1**
-
-### Property 24: Pull Request Message Formatting
-*For any* parsed pull request event, the message formatter SHALL include PR ID, source branch, target branch, and state.
-**Validates: Requirements 7.2**
-
-### Property 25: Push Message Formatting
-*For any* parsed push event, the message formatter SHALL include branch name, commit count, and recent commits.
+### Property 22: Teams Posting Failure Logged
+*For any* Teams API error response, the Teams client SHALL return false and log the error.
 **Validates: Requirements 7.3**
 
-### Property 26: Comment Message Formatting
-*For any* parsed comment event, the message formatter SHALL include context and comment text.
+### Property 23: Teams Posting Headers
+*For any* Teams posting request, the system SHALL include Content-Type: application/json header.
 **Validates: Requirements 7.4**
 
-### Property 27: Commit Status Message Formatting
-*For any* parsed commit status event, the message formatter SHALL include build name, status, and commit hash.
+### Property 24: Teams Posting Timeout
+*For any* Teams posting request, the system SHALL use a 10-second timeout.
 **Validates: Requirements 7.5**
 
-### Property 28: Theme Color Assignment
-*For any* event type and action, the message formatter SHALL assign an appropriate theme color (red for failures, green for success, blue for PRs, purple for pushes).
-**Validates: Requirements 7.6**
+### Property 25: JSON Error Logged
+*For any* JSON parsing error, the system SHALL log it with request ID and event type.
+**Validates: Requirements 8.1**
 
-### Property 29: Mention Entity Creation
-*For any* author with email information, the message formatter SHALL create a mention entity for Teams.
-**Validates: Requirements 7.7**
+### Property 26: Signature Error Logged
+*For any* signature verification error, the system SHALL log it with request ID and event type.
+**Validates: Requirements 8.2**
 
-### Property 30: Null Event Formatting Raises Error
-*For any* null parsed event, the message formatter SHALL raise an error.
-**Validates: Requirements 7.8**
-
-### Property 31: Teams Posting Success
-*For any* valid event data and Teams webhook URL, the Teams client SHALL post the data and return true on success (status 200 or 202).
-**Validates: Requirements 8.1, 8.2**
-
-### Property 32: Teams Posting Failure
-*For any* Teams API error response, the Teams client SHALL return false and log the error.
+### Property 27: Configuration Error Fails Fast
+*For any* configuration error, the system SHALL fail fast with descriptive error message.
 **Validates: Requirements 8.3**
 
-### Property 33: Teams Posting Headers
-*For any* Teams posting request, the system SHALL include Content-Type: application/json header.
+### Property 28: AWS Error Logged
+*For any* AWS service error, the system SHALL log it with request ID and event type.
+**Validates: Requirements 8.4**
+
+### Property 29: Teams API Error Logged
+*For any* Teams API error, the system SHALL log it and return 200 response.
 **Validates: Requirements 8.5**
 
-### Property 34: Teams Posting Timeout
-*For any* Teams posting request, the system SHALL use a 10-second timeout.
-**Validates: Requirements 8.6**
+### Property 30: Log Sanitization
+*For any* log message containing sensitive information (signatures, tokens, secrets), the system SHALL redact the sensitive data.
+**Validates: Requirements 8.7**
 
-### Property 35: JSON Error Response
-*For any* JSON parsing error, the system SHALL return a 400 status code with 'Invalid JSON payload' message.
-**Validates: Requirements 9.1**
+### Property 31: Handler Signature
+*For any* API Gateway proxy event and Lambda context, the handler SHALL accept them and return a valid API Gateway proxy response.
+**Validates: Requirements 9.1, 9.2**
 
-### Property 36: Signature Error Response
-*For any* signature verification error, the system SHALL return a 401 status code with 'Unauthorized' message.
-**Validates: Requirements 9.2**
-
-### Property 37: Configuration Error Response
-*For any* configuration error, the system SHALL return a 500 status code with 'Server configuration error' message.
+### Property 32: Configuration Loading on Initialization
+*For any* module import, the system SHALL load configuration on initialization.
 **Validates: Requirements 9.3**
 
-### Property 38: AWS Error Response
-*For any* AWS service error, the system SHALL return a 500 status code with 'Service configuration error' message.
+### Property 33: Fail Fast on Missing Configuration
+*For any* missing configuration, the system SHALL fail fast and raise an error during initialization.
 **Validates: Requirements 9.4**
 
-### Property 39: Network Error Response
-*For any* network error, the system SHALL return a 500 status code with 'Service temporarily unavailable' message.
-**Validates: Requirements 9.5**
-
-### Property 40: Unexpected Error Response
-*For any* unexpected error, the system SHALL return a 500 status code with 'Internal server error' message.
+### Property 34: Processing Duration Logged
+*For any* webhook processing, the system SHALL track the processing duration and log it.
 **Validates: Requirements 9.6**
 
-### Property 41: Error Logging with Context
-*For any* error, the system SHALL log the error with request ID and event type for debugging.
-**Validates: Requirements 9.7**
-
-### Property 42: Major Steps Logging
-*For any* successful webhook processing, the system SHALL log all major processing steps (configuration load, signature verification, event parsing, Teams posting).
-**Validates: Requirements 10.1**
-
-### Property 43: Request ID in Logs
-*For any* log entry, the system SHALL include the request ID for request correlation.
-**Validates: Requirements 10.2**
-
-### Property 44: Event Type in Logs
-*For any* log entry, the system SHALL include the event type for event tracking.
-**Validates: Requirements 10.3**
-
-### Property 45: Repository in Logs
-*For any* log entry related to event processing, the system SHALL include the repository name.
-**Validates: Requirements 10.4**
-
-### Property 46: Log Sanitization
-*For any* log message containing sensitive information (signatures, tokens, secrets), the system SHALL redact the sensitive data.
-**Validates: Requirements 10.5**
-
-### Property 47: Error Type Logging
-*For any* error, the system SHALL log the error type and message.
-**Validates: Requirements 10.6**
-
-### Property 48: Metrics Emission
-*For any* webhook processing, the system SHALL emit custom CloudWatch metrics for event types, failures, and processing duration.
-**Validates: Requirements 10.7, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6**
-
-### Property 49: Handler Signature
-*For any* API Gateway proxy event and Lambda context, the handler SHALL accept them and return a valid API Gateway proxy response.
-**Validates: Requirements 12.1, 12.2**
-
-### Property 50: Configuration Loading on Initialization
-*For any* module import, the system SHALL load configuration on initialization.
-**Validates: Requirements 12.3**
-
-### Property 51: Fail Fast on Missing Configuration
-*For any* missing configuration, the system SHALL fail fast and return a 500 error without processing events.
-**Validates: Requirements 12.4, 12.5**
-
-### Property 52: Processing Duration Tracking
-*For any* webhook processing, the system SHALL track the processing duration and include it in the response.
-**Validates: Requirements 12.6**
-
-### Property 53: Response Includes Context
-*For any* successful webhook processing, the response SHALL include request ID, event type, and event category.
-**Validates: Requirements 12.7**
-
-### Property 54: Success Response
-*For any* successful webhook processing, the system SHALL return a 200 status code with a success message.
-**Validates: Requirements 12.8**
-
-### Property 55: Filtered Event Response
-*For any* filtered event, the system SHALL return a 200 status code with a filter message.
-**Validates: Requirements 12.9**
-
-### Property 56: Unsupported Event Response
-*For any* unsupported event type, the system SHALL return a 200 status code with an unsupported message.
-**Validates: Requirements 12.10**
+### Property 35: Success Response
+*For any* successful webhook processing, the system SHALL return a 200 status code.
+**Validates: Requirements 9.5**
 
 ## Error Handling
 
-The system implements comprehensive error handling at multiple levels:
+The system implements graceful error handling with a "fail silently" approach for webhook processing:
 
-1. **Configuration Errors**: Fail fast during module initialization
-2. **Signature Verification Errors**: Return 401 without processing
-3. **JSON Parsing Errors**: Return 400 with descriptive message
-4. **AWS Service Errors**: Return 500 with service error message
-5. **Network Errors**: Return 500 with temporary unavailability message
-6. **Unexpected Errors**: Return 500 with generic error message
+1. **Configuration Errors**: Fail fast during module initialization (Lambda won't start)
+2. **Signature Verification Errors**: Log and return 200 (don't fail the webhook)
+3. **JSON Parsing Errors**: Log and return 200 (don't fail the webhook)
+4. **AWS Service Errors**: Log and return 200 (don't fail the webhook)
+5. **Teams API Errors**: Log and return 200 (don't fail the webhook)
+6. **Non-Failure Events**: Return 200 silently (no logging needed)
 
 All errors are logged with context (request ID, event type) for debugging.
 
@@ -584,8 +437,8 @@ All errors are logged with context (request ID, event type) for debugging.
 Unit tests verify specific examples and edge cases:
 - Configuration loading with valid and invalid values
 - Signature verification with matching and mismatched signatures
-- Event parsing for each supported event type
-- Message formatting for each event category
+- Failure detection for each supported failure event type
+- Message formatting for each failure type
 - Error handling for each error condition
 - Logging and sanitization
 
@@ -597,13 +450,12 @@ Property-based tests verify universal properties across all inputs:
 - HMAC-SHA256 signature computation
 - Configuration validation
 - Secret retrieval and caching
-- Event filtering for each mode
-- Event parsing for each event type
-- Message formatting for each event category
+- Failure detection for each event type
+- Non-failure events are ignored
+- Message formatting for each failure type
 - Teams posting success and failure
-- Error responses for each error type
-- Logging includes required context
-- Metrics emission
+- Error responses and logging
+- Log sanitization
 
 **Testing Framework**: Jest with fast-check for property-based testing
 **Minimum Iterations**: 100 per property test
@@ -615,7 +467,6 @@ Property-based tests verify universal properties across all inputs:
 - AWS Lambda execution role with permissions for:
   - Secrets Manager (GetSecretValue)
   - CloudWatch Logs (PutLogEvents)
-  - CloudWatch Metrics (PutMetricData)
 - Environment variables for configuration
 - Lambda timeout: 30 seconds (sufficient for webhook processing)
 - Memory: 256 MB (sufficient for JSON processing and AWS SDK)

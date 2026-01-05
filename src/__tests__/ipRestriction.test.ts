@@ -1,7 +1,10 @@
 /**
  * IP Restriction Module Tests
+ * Property-based tests using fast-check
+ * Requirements: 2.5.2, 2.5.3, 1.2
  */
 
+import fc from 'fast-check';
 import { getSourceIp, validateSourceIp, clearIpRangesCache } from '../webhook/ipRestriction';
 import * as awsSecrets from '../aws/secrets';
 
@@ -133,6 +136,65 @@ describe('IP Restriction Module', () => {
 
       const result = await validateSourceIp(event, mockSecretArn, 'test-request-id');
       expect(result.isValid).toBe(true); // Fail open
+    });
+
+    // Property 1: IP Whitelist Validation
+    // For any source IP address, the system SHALL correctly identify whether it is in the Bitbucket IP whitelist
+    it('Property 1: IP Whitelist Validation', async () => {
+      (awsSecrets.getSecret as jest.Mock).mockResolvedValue(JSON.stringify(mockIpRanges));
+
+      await fc.assert(
+        fc.asyncProperty(
+          fc.oneof(
+            fc.constant('18.205.93.50'),
+            fc.constant('18.205.93.100'),
+            fc.constant('18.234.32.200')
+          ),
+          async (ip: string) => {
+            const event = {
+              requestContext: {
+                identity: {
+                  sourceIp: ip
+                }
+              }
+            };
+
+            const result = await validateSourceIp(event, mockSecretArn, 'test-request-id');
+            expect(result.isValid).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    // Property 2: Non-Whitelisted IP Returns 200
+    // For any request from a non-whitelisted IP, the system SHALL return a 200 status code and log the rejection
+    it('Property 2: Non-Whitelisted IP Returns 200', async () => {
+      (awsSecrets.getSecret as jest.Mock).mockResolvedValue(JSON.stringify(mockIpRanges));
+
+      await fc.assert(
+        fc.asyncProperty(
+          fc.oneof(
+            fc.constant('192.168.1.1'),
+            fc.constant('10.0.0.1'),
+            fc.constant('172.16.0.1')
+          ),
+          async (ip: string) => {
+            const event = {
+              requestContext: {
+                identity: {
+                  sourceIp: ip
+                }
+              }
+            };
+
+            const result = await validateSourceIp(event, mockSecretArn, 'test-request-id');
+            expect(result.isValid).toBe(false);
+            expect(result.reason).toContain('not in allowed ranges');
+          }
+        ),
+        { numRuns: 100 }
+      );
     });
   });
 });

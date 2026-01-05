@@ -2,18 +2,16 @@
 
 ## Introduction
 
-This document specifies the requirements for migrating the Bitbucket Teams webhook Lambda function from Python to Node.js. The system processes Bitbucket webhook events, validates signatures, filters events, parses event data, formats messages, and posts them to Microsoft Teams. The migration maintains all existing functionality while using Node.js as the runtime.
+This document specifies the requirements for migrating the Bitbucket Teams webhook Lambda function from Python to Node.js. The system receives Bitbucket webhook events, validates signatures, detects failure events, formats them into rich Teams messages, and posts them to Microsoft Teams. Only failure events are processed and posted; all other events are silently ignored.
 
 ## Glossary
 
 - **System**: The Bitbucket Teams Webhook Lambda function
 - **Webhook**: HTTP callback from Bitbucket containing event data
-- **Event**: A Bitbucket action (push, pull request, comment, etc.)
+- **Failure Event**: A Bitbucket event indicating a failure (build failure, declined PR, failed deployment, etc.)
 - **Signature**: HMAC-SHA256 hash for webhook authentication
 - **Teams**: Microsoft Teams platform for posting messages
 - **Adaptive Card**: Microsoft Teams message format
-- **Event Filter**: Configuration to include/exclude specific event types
-- **Parsed Event**: Internal representation of a Bitbucket event
 - **AWS Secrets Manager**: Service for storing webhook secrets and Teams URL
 
 ## Requirements
@@ -28,8 +26,8 @@ This document specifies the requirements for migrating the Bitbucket Teams webho
 2. WHEN a webhook request is received, THE System SHALL extract the X-Event-Key header to determine event type
 3. WHEN a webhook request is received, THE System SHALL extract the X-Hub-Signature header for signature verification
 4. WHEN the request body is base64 encoded, THE System SHALL decode it before processing
-5. WHEN the request body contains invalid JSON, THE System SHALL return a 400 error with descriptive message
-6. WHEN signature verification fails, THE System SHALL return a 401 Unauthorized response without further processing
+5. WHEN the request body contains invalid JSON, THE System SHALL return a 200 response (silently ignore)
+6. WHEN signature verification fails, THE System SHALL return a 200 response (silently ignore)
 7. WHEN signature verification succeeds, THE System SHALL proceed with event processing
 
 ### Requirement 2: Signature Verification
@@ -53,10 +51,7 @@ This document specifies the requirements for migrating the Bitbucket Teams webho
 
 1. THE Configuration_Manager SHALL load TEAMS_WEBHOOK_URL_SECRET_ARN from environment variables
 2. THE Configuration_Manager SHALL load BITBUCKET_SECRET_ARN from environment variables
-3. THE Configuration_Manager SHALL load EVENT_FILTER from environment variables (optional)
-4. THE Configuration_Manager SHALL load FILTER_MODE from environment variables (optional, defaults to 'all')
-5. WHEN required configuration is missing, THE System SHALL fail fast with descriptive error message
-6. WHEN configuration is invalid, THE System SHALL fail fast with descriptive error message
+3. WHEN required configuration is missing, THE System SHALL fail fast with descriptive error message
 
 ### Requirement 4: Secret Retrieval
 
@@ -66,107 +61,60 @@ This document specifies the requirements for migrating the Bitbucket Teams webho
 
 1. THE Secret_Retriever SHALL retrieve the webhook secret from AWS Secrets Manager using the configured ARN
 2. THE Secret_Retriever SHALL retrieve the Teams webhook URL from AWS Secrets Manager using the configured ARN
-3. WHEN a secret retrieval fails, THE System SHALL return a 500 error with descriptive message
-4. THE Secret_Retriever SHALL cache secrets for warm Lambda invocations to improve performance
-5. WHEN a secret retrieval fails due to AWS service error, THE System SHALL log the error code and message
+3. THE Secret_Retriever SHALL cache secrets for warm Lambda invocations to improve performance
 
-### Requirement 5: Event Filtering
+### Requirement 5: Failure Event Detection
 
-**User Story:** As a system administrator, I want to filter webhook events based on configuration, so that only relevant events are processed.
+**User Story:** As a developer, I want to detect failure events from Bitbucket, so that only failures are posted to Teams.
 
 #### Acceptance Criteria
 
-1. WHEN filter_mode is 'all', THE System SHALL process all event types
-2. WHEN filter_mode is 'deployments', THE System SHALL only process deployment-related events (commit status, approvals)
-3. WHEN filter_mode is 'failures', THE System SHALL only process failure events (failed builds, declined PRs)
-4. WHEN filter_mode is 'explicit', THE System SHALL only process event types listed in EVENT_FILTER
-5. WHEN an event is filtered out, THE System SHALL return a 200 response indicating the event was filtered
-6. WHEN an event passes the filter, THE System SHALL proceed with event processing
+1. WHEN a pull request declined event is received, THE System SHALL identify it as a failure event
+2. WHEN a commit status failed event is received, THE System SHALL identify it as a failure event
+3. WHEN a build failure event is received, THE System SHALL identify it as a failure event
+4. WHEN a non-failure event is received, THE System SHALL return a 200 response (silently ignore)
+5. THE System SHALL extract failure details (type, repository, author, reason, link)
 
-### Requirement 6: Event Parsing
+### Requirement 6: Failure Message Formatting
 
-**User Story:** As a developer, I want Bitbucket events to be parsed into a consistent internal format, so that downstream processing is simplified.
-
-#### Acceptance Criteria
-
-1. WHEN a pull request event is received, THE Event_Parser SHALL extract PR details (ID, title, author, branches, state)
-2. WHEN a push event is received, THE Event_Parser SHALL extract push details (branch, commits, author)
-3. WHEN a comment event is received, THE Event_Parser SHALL extract comment details (text, author, context)
-4. WHEN a commit status event is received, THE Event_Parser SHALL extract status details (state, build name, commit hash)
-5. WHEN an unsupported event type is received, THE Event_Parser SHALL return null to indicate no processing needed
-6. WHEN required fields are missing from the payload, THE Event_Parser SHALL raise a ValueError with descriptive message
-7. THE Event_Parser SHALL extract author email when available for mention support
-
-### Requirement 7: Message Formatting
-
-**User Story:** As a developer, I want parsed events to be formatted into Teams Adaptive Card data, so that messages display correctly in Teams.
+**User Story:** As a developer, I want failure events to be formatted into rich Teams messages, so that team members get detailed information about failures.
 
 #### Acceptance Criteria
 
 1. THE Message_Formatter SHALL create Adaptive Card data with title, description, and repository information
-2. WHEN formatting a pull request event, THE Message_Formatter SHALL include PR ID, source branch, target branch, and state
-3. WHEN formatting a push event, THE Message_Formatter SHALL include branch name, commit count, and recent commits
-4. WHEN formatting a comment event, THE Message_Formatter SHALL include context (PR or commit) and comment text
-5. WHEN formatting a commit status event, THE Message_Formatter SHALL include build name, status, and commit hash
-6. THE Message_Formatter SHALL assign theme colors based on event type and action (red for failures, green for success, blue for PRs, purple for pushes)
-7. THE Message_Formatter SHALL create mention entities for author email when available
-8. WHEN parsed_event is null, THE Message_Formatter SHALL raise a ValueError
+2. WHEN formatting a declined PR failure, THE Message_Formatter SHALL include PR ID, title, author, and reason
+3. WHEN formatting a commit status failure, THE Message_Formatter SHALL include build name, commit hash, and failure reason
+4. THE Message_Formatter SHALL assign red theme color for all failure events
+5. THE Message_Formatter SHALL create mention entities for author email when available
+6. THE Message_Formatter SHALL include a link to the failure event in Bitbucket
 
-### Requirement 8: Teams Message Posting
+### Requirement 7: Teams Message Posting
 
-**User Story:** As a developer, I want formatted messages to be posted to Microsoft Teams, so that team members are notified of Bitbucket events.
+**User Story:** As a developer, I want formatted failure messages to be posted to Microsoft Teams, so that team members are notified of failures.
 
 #### Acceptance Criteria
 
-1. THE Teams_Client SHALL post event data to the Teams Workflow webhook URL
+1. THE Teams_Client SHALL post failure data to the Teams Workflow webhook URL
 2. WHEN the Teams API returns status 200 or 202, THE System SHALL consider the post successful
-3. WHEN the Teams API returns any other status, THE System SHALL consider the post failed and log the error
-4. WHEN posting to Teams fails, THE System SHALL return a 500 error response
-5. THE Teams_Client SHALL include appropriate headers (Content-Type: application/json)
-6. THE Teams_Client SHALL use a 10-second timeout for Teams API requests
+3. WHEN the Teams API returns any other status, THE System SHALL log the error and return 200 (do not fail the webhook)
+4. THE Teams_Client SHALL include appropriate headers (Content-Type: application/json)
+5. THE Teams_Client SHALL use a 10-second timeout for Teams API requests
 
-### Requirement 9: Error Handling
+### Requirement 8: Error Handling and Logging
 
-**User Story:** As a developer, I want errors to be handled gracefully with appropriate HTTP responses, so that the system is resilient to malformed requests and service failures.
-
-#### Acceptance Criteria
-
-1. WHEN a JSON parsing error occurs, THE System SHALL return a 400 error with 'Invalid JSON payload' message
-2. WHEN a signature verification error occurs, THE System SHALL return a 401 error with 'Unauthorized' message
-3. WHEN a configuration error occurs, THE System SHALL return a 500 error with 'Server configuration error' message
-4. WHEN an AWS service error occurs, THE System SHALL return a 500 error with 'Service configuration error' message
-5. WHEN a network error occurs, THE System SHALL return a 500 error with 'Service temporarily unavailable' message
-6. WHEN an unexpected error occurs, THE System SHALL return a 500 error with 'Internal server error' message
-7. WHEN an error occurs, THE System SHALL log the error with request ID and event type for debugging
-
-### Requirement 10: Logging and Observability
-
-**User Story:** As a system administrator, I want comprehensive logging with context information, so that I can debug issues and monitor system health.
+**User Story:** As a developer, I want errors to be handled gracefully and logged, so that the system is resilient and debuggable.
 
 #### Acceptance Criteria
 
-1. THE Logger SHALL log all major processing steps (configuration load, signature verification, event parsing, Teams posting)
-2. WHEN logging, THE Logger SHALL include request ID for request correlation
-3. WHEN logging, THE Logger SHALL include event type for event tracking
-4. WHEN logging, THE Logger SHALL include repository name for repository tracking
-5. THE Logger SHALL sanitize log messages to prevent exposure of sensitive information (signatures, tokens, secrets)
-6. WHEN an error occurs, THE Logger SHALL log the error type and message for debugging
-7. THE Logger SHALL emit custom CloudWatch metrics for event types, failures, and processing duration
+1. WHEN a JSON parsing error occurs, THE System SHALL log it and return a 200 response
+2. WHEN a signature verification error occurs, THE System SHALL log it and return a 200 response
+3. WHEN a configuration error occurs, THE System SHALL fail fast with descriptive error message
+4. WHEN an AWS service error occurs, THE System SHALL log it and return a 200 response
+5. WHEN a Teams API error occurs, THE System SHALL log it and return a 200 response
+6. WHEN an error occurs, THE System SHALL log the error with request ID and event type for debugging
+7. THE Logger SHALL sanitize log messages to prevent exposure of sensitive information (signatures, tokens, secrets)
 
-### Requirement 11: Metrics and Monitoring
-
-**User Story:** As a system administrator, I want custom metrics to be emitted to CloudWatch, so that I can monitor system performance and failures.
-
-#### Acceptance Criteria
-
-1. THE Metrics_Emitter SHALL emit a metric for each event type received
-2. THE Metrics_Emitter SHALL emit a metric when signature verification fails
-3. THE Metrics_Emitter SHALL emit a metric when Teams API posting fails
-4. THE Metrics_Emitter SHALL emit a metric when an unsupported event type is received
-5. THE Metrics_Emitter SHALL emit a metric for processing duration in milliseconds
-6. THE Metrics_Emitter SHALL use CloudWatch Embedded Metric Format (EMF) for metric emission
-
-### Requirement 12: Lambda Handler
+### Requirement 9: Lambda Handler
 
 **User Story:** As a developer, I want a Lambda handler that orchestrates all components, so that the system processes webhooks end-to-end.
 
@@ -176,9 +124,5 @@ This document specifies the requirements for migrating the Bitbucket Teams webho
 2. THE Lambda_Handler SHALL return an API Gateway proxy response with statusCode and body
 3. THE Lambda_Handler SHALL load configuration on module initialization
 4. THE Lambda_Handler SHALL fail fast if configuration is not loaded
-5. THE Lambda_Handler SHALL fail fast if filter configuration is not loaded
-6. THE Lambda_Handler SHALL track processing duration and include it in the response
-7. THE Lambda_Handler SHALL include request ID, event type, and event category in the response
-8. WHEN processing succeeds, THE Lambda_Handler SHALL return a 200 response with success message
-9. WHEN an event is filtered, THE Lambda_Handler SHALL return a 200 response with filter message
-10. WHEN an event type is unsupported, THE Lambda_Handler SHALL return a 200 response with unsupported message
+5. THE Lambda_Handler SHALL return 200 for all successful webhook processing (whether event was processed or ignored)
+6. THE Lambda_Handler SHALL track processing duration and log it

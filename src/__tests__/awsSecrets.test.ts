@@ -125,8 +125,7 @@ describe('AWS Secrets Manager Integration', () => {
       const config = new Configuration(
         'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url',
         'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret',
-        '',
-        'all'
+        'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips'
       );
 
       const secretValue = 'webhook-secret-value';
@@ -150,8 +149,7 @@ describe('AWS Secrets Manager Integration', () => {
       const config = new Configuration(
         'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url',
         'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret',
-        '',
-        'all'
+        'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips'
       );
 
       const teamsUrl = 'https://outlook.webhook.office.com/webhookb2/...';
