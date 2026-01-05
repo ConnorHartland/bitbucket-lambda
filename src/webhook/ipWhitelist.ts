@@ -4,22 +4,19 @@
  */
 
 import { APIGatewayProxyEvent } from '../types';
+import { BITBUCKET_IP_RANGES } from '../constants';
 
 /**
  * Bitbucket IP ranges - will be set from configuration
  */
-let BITBUCKET_IP_RANGES: string[] = [
-  '104.192.136.0/21',
-  '185.166.140.0/22',
-  '13.200.41.128/25',
-];
+let ipRanges: string[] = BITBUCKET_IP_RANGES;
 
 /**
  * Set the IP ranges to use for validation
  * @param ranges Array of CIDR ranges
  */
 export function setIpRanges(ranges: string[]): void {
-  BITBUCKET_IP_RANGES = ranges;
+  ipRanges = ranges;
 }
 
 /**
@@ -117,7 +114,7 @@ export function extractSourceIp(event: APIGatewayProxyEvent): string | undefined
  * @returns True if the IP is whitelisted, false otherwise
  */
 export function isIpWhitelisted(sourceIp: string): boolean {
-  for (const cidr of BITBUCKET_IP_RANGES) {
+  for (const cidr of ipRanges) {
     if (isIpInCIDR(sourceIp, cidr)) {
       return true;
     }

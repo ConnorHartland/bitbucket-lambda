@@ -4,15 +4,7 @@
  */
 
 import { Config } from './types';
-
-/**
- * Default Bitbucket IP ranges
- */
-const DEFAULT_BITBUCKET_IP_RANGES = [
-  '104.192.136.0/21',
-  '185.166.140.0/22',
-  '13.200.41.128/25',
-];
+import { BITBUCKET_IP_RANGES } from './constants';
 
 /**
  * ConfigManager class to load and validate configuration from environment variables
@@ -44,7 +36,7 @@ export class ConfigManager {
     const ipRestrictionEnabled = ipRestrictionEnabledStr.toLowerCase() !== 'false';
 
     // Parse BITBUCKET_IP_RANGES from environment (comma-separated), or use defaults
-    let bitbucketIpRanges = DEFAULT_BITBUCKET_IP_RANGES;
+    let bitbucketIpRanges = BITBUCKET_IP_RANGES;
     if (bitbucketIpRangesStr) {
       bitbucketIpRanges = bitbucketIpRangesStr.split(',').map((range) => range.trim());
     }

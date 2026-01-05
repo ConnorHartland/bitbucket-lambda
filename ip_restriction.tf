@@ -2,23 +2,13 @@
 # Since HTTP API doesn't support WAFv2 or resource policies,
 # IP filtering is implemented in the Lambda handler via environment variables
 
-# Bitbucket IP ranges (update periodically from Atlassian documentation)
+# Bitbucket IP ranges
+# These are the IP ranges that Bitbucket webhooks originate from
 locals {
   bitbucket_ip_ranges = [
-    "18.205.93.0/25",
-    "18.234.32.128/25",
-    "13.52.5.0/25",
-    "52.53.62.128/25",
-    "13.236.8.128/25",
-    "18.136.214.0/25",
-    "52.215.192.128/25",
-    "104.192.137.240/28",
-    "104.192.138.240/28",
-    "104.192.140.240/28",
-    "104.192.142.240/28",
-    "104.192.143.240/28",
-    "185.166.143.240/28",
-    "185.166.142.240/28"
+    "104.192.136.0/21",
+    "185.166.140.0/22",
+    "13.200.41.128/25"
   ]
 }
 
