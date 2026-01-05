@@ -9,13 +9,15 @@ process.env.TEAMS_WEBHOOK_URL_SECRET_ARN =
   'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url';
 process.env.BITBUCKET_SECRET_ARN =
   'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
+process.env.BITBUCKET_IPS_SECRET_ARN =
+  'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips';
 process.env.FILTER_MODE = 'all';
 process.env.EVENT_FILTER = '';
 
-import { handler } from './index';
-import { computeSignature } from './signature';
-import { clearSecretCache, closeSecretsClient } from './awsSecrets';
-import { APIGatewayProxyEvent } from './webhookReception';
+import { handler } from '../index';
+import { computeSignature } from '../webhook/signature';
+import { clearSecretCache, closeSecretsClient } from '../aws/secrets';
+import { APIGatewayProxyEvent } from '../webhook/reception';
 
 // Mock AWS Secrets Manager
 jest.mock('@aws-sdk/client-secrets-manager', () => {
@@ -28,6 +30,13 @@ jest.mock('@aws-sdk/client-secrets-manager', () => {
         }
         if (secretId === 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url') {
           return { SecretString: 'https://outlook.webhook.office.com/webhookb2/test' };
+        }
+        if (secretId === 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips') {
+          return {
+            SecretString: JSON.stringify({
+              ip_ranges: ['192.168.1.0/24', '10.0.0.0/8']
+            })
+          };
         }
         throw new Error('Secret not found');
       }),
@@ -58,6 +67,24 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
     // Restore fetch
     global.fetch = originalFetch;
     closeSecretsClient();
+  });
+
+  // Helper to create event with sourceIp
+  const createEventWithIp = (
+    headers: Record<string, string>,
+    body: string,
+    requestId: string,
+    sourceIp: string = '192.168.1.100'
+  ): APIGatewayProxyEvent => ({
+    headers,
+    body,
+    isBase64Encoded: false,
+    requestContext: {
+      requestId,
+      identity: {
+        sourceIp
+      }
+    }
   });
 
   describe('13.1 End-to-end test for pull request created flow', () => {
@@ -99,18 +126,15 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const signature = computeSignature(body, secret);
 
       // Create API Gateway event
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'pullrequest:created',
           'X-Hub-Signature': `sha256=${signature}`,
           'Content-Type': 'application/json'
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-123'
-        }
-      };
+        'test-request-123'
+      );
 
       // Mock Teams posting
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -178,17 +202,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'pullrequest:created',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-456'
-        }
-      };
+        'test-request-456'
+      );
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         status: 202,
@@ -252,17 +273,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'repo:push',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-push-1'
-        }
-      };
+        'test-request-push-1'
+      );
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         status: 200,
@@ -338,17 +356,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'repo:push',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-push-2'
-        }
-      };
+        'test-request-push-2'
+      );
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         status: 200,
@@ -377,17 +392,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'repo:unknown_event',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-unsupported'
-        }
-      };
+        'test-request-unsupported'
+      );
 
       const response = await handler(event, {});
 
@@ -437,17 +449,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       // Use wrong secret to generate invalid signature
       const invalidSignature = computeSignature(body, 'wrong-secret');
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'pullrequest:created',
           'X-Hub-Signature': `sha256=${invalidSignature}`
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-invalid-sig'
-        }
-      };
+        'test-request-invalid-sig'
+      );
 
       const response = await handler(event, {});
 
@@ -492,17 +501,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
 
       const body = JSON.stringify(prPayload);
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'pullrequest:created'
           // Missing X-Hub-Signature header
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-no-sig'
-        }
-      };
+        'test-request-no-sig'
+      );
 
       const response = await handler(event, {});
 
@@ -549,17 +555,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'pullrequest:created',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-teams-fail'
-        }
-      };
+        'test-request-teams-fail'
+      );
 
       // Mock Teams posting to fail
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -612,17 +615,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'pullrequest:created',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-teams-timeout'
-        }
-      };
+        'test-request-teams-timeout'
+      );
 
       // Mock Teams posting to timeout
       (global.fetch as jest.Mock).mockRejectedValueOnce(
@@ -672,17 +672,14 @@ describe('Integration Tests - Bitbucket Teams Webhook', () => {
       const secret = 'test-webhook-secret';
       const signature = computeSignature(body, secret);
 
-      const event: APIGatewayProxyEvent = {
-        headers: {
+      const event = createEventWithIp(
+        {
           'X-Event-Key': 'pullrequest:created',
           'X-Hub-Signature': `sha256=${signature}`
         },
         body,
-        isBase64Encoded: false,
-        requestContext: {
-          requestId: 'test-request-teams-400'
-        }
-      };
+        'test-request-teams-400'
+      );
 
       // Mock Teams posting to return 400
       (global.fetch as jest.Mock).mockResolvedValueOnce({

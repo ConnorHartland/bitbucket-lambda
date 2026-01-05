@@ -14,10 +14,10 @@ import {
   ConfigurationError,
   AwsServiceError,
   NetworkError
-} from './errorHandler';
+} from '../utils/errorHandler';
 
 // Mock the logging module
-jest.mock('./loggingUtils', () => ({
+jest.mock('../utils/logging', () => ({
   logWithContext: jest.fn()
 }));
 
@@ -495,7 +495,7 @@ describe('Error Handling', () => {
 
   describe('Error Logging with Context', () => {
     it('should log error with request ID and event type', () => {
-      const { logWithContext } = require('./loggingUtils');
+      const { logWithContext } = require('../utils/logging');
       const error = new JsonParsingError('Invalid JSON');
       const requestId = 'req-123';
       const eventType = 'repo:push';
@@ -512,7 +512,7 @@ describe('Error Handling', () => {
     });
 
     it('Property 41: Error Logging with Context', () => {
-      const { logWithContext } = require('./loggingUtils');
+      const { logWithContext } = require('../utils/logging');
 
       fc.assert(
         fc.property(

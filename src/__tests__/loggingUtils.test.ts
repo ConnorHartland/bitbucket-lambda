@@ -4,7 +4,7 @@
  */
 
 import fc from 'fast-check';
-import { sanitizeLogMessage, logWithContext, logger } from './loggingUtils';
+import { sanitizeLogMessage, logWithContext, logger } from '../utils/logging';
 
 describe('sanitizeLogMessage', () => {
   it('should redact webhook signatures', () => {

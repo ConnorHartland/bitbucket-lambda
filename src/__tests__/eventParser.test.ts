@@ -5,7 +5,7 @@
  */
 
 import * as fc from 'fast-check';
-import { parse } from './eventParser';
+import { parse } from '../webhook/parser';
 
 describe('Event Parser', () => {
   describe('Pull Request Event Parsing', () => {

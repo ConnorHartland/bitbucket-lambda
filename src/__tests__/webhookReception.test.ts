@@ -5,7 +5,7 @@
  */
 
 import fc from 'fast-check';
-import { extractWebhookEvent, getRequestId, APIGatewayProxyEvent } from './webhookReception';
+import { extractWebhookEvent, getRequestId, APIGatewayProxyEvent } from '../webhook/reception';
 
 describe('Webhook Reception', () => {
   describe('extractWebhookEvent', () => {

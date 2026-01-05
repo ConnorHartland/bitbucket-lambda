@@ -94,6 +94,7 @@ resource "aws_lambda_function" "bitbucket_notifier" {
     variables = {
       TEAMS_WEBHOOK_URL_SECRET_ARN = aws_secretsmanager_secret.teams_url.arn
       BITBUCKET_SECRET_ARN         = aws_secretsmanager_secret.webhook_secret.arn
+      BITBUCKET_IPS_SECRET_ARN     = aws_secretsmanager_secret.bitbucket_ips.arn
       EVENT_FILTER                 = var.event_filter
       FILTER_MODE                  = var.filter_mode
     }

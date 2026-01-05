@@ -6,17 +6,20 @@
 export class Configuration {
   teamsWebhookUrlSecretArn: string;
   bitbucketSecretArn: string;
+  bitbucketIpsSecretArn: string;
   eventFilter: string;
   filterMode: string;
 
   constructor(
     teamsWebhookUrlSecretArn: string,
     bitbucketSecretArn: string,
+    bitbucketIpsSecretArn: string,
     eventFilter: string = '',
     filterMode: string = 'all'
   ) {
     this.teamsWebhookUrlSecretArn = teamsWebhookUrlSecretArn;
     this.bitbucketSecretArn = bitbucketSecretArn;
+    this.bitbucketIpsSecretArn = bitbucketIpsSecretArn;
     this.eventFilter = eventFilter;
     this.filterMode = filterMode;
   }
@@ -24,6 +27,7 @@ export class Configuration {
   static loadFromEnvironment(): Configuration {
     const teamsWebhookUrlSecretArn = process.env.TEAMS_WEBHOOK_URL_SECRET_ARN;
     const bitbucketSecretArn = process.env.BITBUCKET_SECRET_ARN;
+    const bitbucketIpsSecretArn = process.env.BITBUCKET_IPS_SECRET_ARN;
     const eventFilter = process.env.EVENT_FILTER || '';
     const filterMode = process.env.FILTER_MODE || 'all';
 
@@ -39,6 +43,12 @@ export class Configuration {
       );
     }
 
+    if (!bitbucketIpsSecretArn) {
+      throw new Error(
+        'Configuration error: BITBUCKET_IPS_SECRET_ARN environment variable is required'
+      );
+    }
+
     const validFilterModes = ['all', 'deployments', 'failures', 'explicit'];
     if (!validFilterModes.includes(filterMode)) {
       throw new Error(
@@ -46,7 +56,7 @@ export class Configuration {
       );
     }
 
-    return new Configuration(teamsWebhookUrlSecretArn, bitbucketSecretArn, eventFilter, filterMode);
+    return new Configuration(teamsWebhookUrlSecretArn, bitbucketSecretArn, bitbucketIpsSecretArn, eventFilter, filterMode);
   }
 }
 

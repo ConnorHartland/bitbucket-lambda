@@ -15,7 +15,12 @@ export interface APIGatewayProxyEvent {
   headers: Record<string, string>;
   body: string | null;
   isBase64Encoded: boolean;
-  requestContext?: { requestId?: string };
+  requestContext?: {
+    requestId?: string;
+    identity?: {
+      sourceIp?: string;
+    };
+  };
 }
 
 export function extractWebhookEvent(event: APIGatewayProxyEvent): WebhookEvent {

@@ -11,7 +11,7 @@ import {
   emitTeamsAPIFailure,
   emitUnsupportedEvent,
   emitProcessingDuration
-} from './metrics';
+} from '../aws/metrics';
 
 describe('emitMetric', () => {
   let consoleLogSpy: jest.SpyInstance;

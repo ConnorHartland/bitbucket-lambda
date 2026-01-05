@@ -11,8 +11,8 @@ import {
   retrieveTeamsUrl,
   clearSecretCache,
   closeSecretsClient
-} from './awsSecrets';
-import { Configuration } from './config';
+} from '../aws/secrets';
+import { Configuration } from '../config';
 import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 
 // Mock AWS SDK

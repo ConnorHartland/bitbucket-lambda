@@ -10,7 +10,7 @@ import {
   computeSignature,
   verifySignature,
   validateWebhookSignature
-} from './signature';
+} from '../webhook/signature';
 import { createHmac } from 'crypto';
 
 describe('Signature Verification', () => {

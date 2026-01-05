@@ -9,7 +9,7 @@ import {
   GetSecretValueCommand,
   GetSecretValueCommandInput
 } from '@aws-sdk/client-secrets-manager';
-import { Configuration } from './config';
+import { Configuration } from '../config';
 
 const secretCache: Map<string, string> = new Map();
 let secretsClient: SecretsManagerClient | null = null;

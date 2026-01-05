@@ -5,15 +5,16 @@
  */
 
 import { Configuration, FilterConfig } from './config';
-import { extractWebhookEvent, getRequestId, APIGatewayProxyEvent } from './webhookReception';
-import { validateWebhookSignature } from './signature';
-import { retrieveWebhookSecret, retrieveTeamsUrl } from './awsSecrets';
-import { parse as parseEvent } from './eventParser';
-import { formatTeamsMessage } from './teamsFormatter';
-import { postToTeams } from './teamsClient';
-import { handleError, validateJsonPayload, APIGatewayProxyResult, SignatureVerificationError } from './errorHandler';
-import { logger } from './loggingUtils';
-import { emitEventTypeMetric, emitSignatureFailure, emitUnsupportedEvent, emitProcessingDuration } from './metrics';
+import { extractWebhookEvent, getRequestId, APIGatewayProxyEvent } from './webhook/reception';
+import { validateWebhookSignature } from './webhook/signature';
+import { retrieveWebhookSecret, retrieveTeamsUrl } from './aws/secrets';
+import { validateSourceIp } from './webhook/ipRestriction';
+import { parse as parseEvent } from './webhook/parser';
+import { formatTeamsMessage } from './teams/formatter';
+import { postToTeams } from './teams/client';
+import { handleError, validateJsonPayload, APIGatewayProxyResult, SignatureVerificationError } from './utils/errorHandler';
+import { logger } from './utils/logging';
+import { emitEventTypeMetric, emitSignatureFailure, emitUnsupportedEvent, emitProcessingDuration } from './aws/metrics';
 
 /**
  * Module-level configuration and filter config
@@ -75,6 +76,22 @@ export const handler = async (
       const error = new Error('Configuration not initialized');
       logger.error('Configuration not initialized', requestId);
       return handleError(error, requestId);
+    }
+
+    // Validate source IP against allowed Bitbucket ranges
+    logger.info('Validating source IP', requestId);
+    const ipValidation = await validateSourceIp(event, config.bitbucketIpsSecretArn, requestId);
+    if (!ipValidation.isValid) {
+      logger.warn(`IP validation failed: ${ipValidation.reason}`, requestId);
+      return {
+        statusCode: 403,
+        body: JSON.stringify({
+          statusCode: 403,
+          message: 'Access denied',
+          requestId,
+          reason: ipValidation.reason
+        })
+      };
     }
 
     // Requirement 1.1, 1.2, 1.3, 1.4: Extract headers and body from API Gateway event

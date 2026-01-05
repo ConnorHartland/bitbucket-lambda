@@ -10,7 +10,7 @@ import {
   createAdaptiveCardData,
   formatTeamsMessage,
   ParsedEvent
-} from './teamsFormatter';
+} from '../teams/formatter';
 
 describe('Teams Message Formatter', () => {
   // Helper function to create a valid ParsedEvent

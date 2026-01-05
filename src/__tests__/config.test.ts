@@ -4,7 +4,7 @@
  */
 
 import fc from 'fast-check';
-import { Configuration, FilterConfig } from './config';
+import { Configuration, FilterConfig } from '../config';
 
 describe('Configuration', () => {
   const originalEnv = process.env;
@@ -22,6 +22,7 @@ describe('Configuration', () => {
     it('should load valid configuration from environment variables', () => {
       process.env.TEAMS_WEBHOOK_URL_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url';
       process.env.BITBUCKET_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
+      process.env.BITBUCKET_IPS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips';
       process.env.EVENT_FILTER = 'repo:push,pullrequest:created';
       process.env.FILTER_MODE = 'explicit';
 
@@ -33,6 +34,9 @@ describe('Configuration', () => {
       expect(config.bitbucketSecretArn).toBe(
         'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret'
       );
+      expect(config.bitbucketIpsSecretArn).toBe(
+        'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips'
+      );
       expect(config.eventFilter).toBe('repo:push,pullrequest:created');
       expect(config.filterMode).toBe('explicit');
     });
@@ -40,6 +44,7 @@ describe('Configuration', () => {
     it('should use default values for optional variables', () => {
       process.env.TEAMS_WEBHOOK_URL_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url';
       process.env.BITBUCKET_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
+      process.env.BITBUCKET_IPS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips';
       delete process.env.EVENT_FILTER;
       delete process.env.FILTER_MODE;
 
@@ -52,6 +57,7 @@ describe('Configuration', () => {
     it('should fail fast when TEAMS_WEBHOOK_URL_SECRET_ARN is missing', () => {
       delete process.env.TEAMS_WEBHOOK_URL_SECRET_ARN;
       process.env.BITBUCKET_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
+      process.env.BITBUCKET_IPS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips';
 
       expect(() => Configuration.loadFromEnvironment()).toThrow(
         'Configuration error: TEAMS_WEBHOOK_URL_SECRET_ARN environment variable is required'
@@ -61,15 +67,27 @@ describe('Configuration', () => {
     it('should fail fast when BITBUCKET_SECRET_ARN is missing', () => {
       process.env.TEAMS_WEBHOOK_URL_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url';
       delete process.env.BITBUCKET_SECRET_ARN;
+      process.env.BITBUCKET_IPS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips';
 
       expect(() => Configuration.loadFromEnvironment()).toThrow(
         'Configuration error: BITBUCKET_SECRET_ARN environment variable is required'
       );
     });
 
+    it('should fail fast when BITBUCKET_IPS_SECRET_ARN is missing', () => {
+      process.env.TEAMS_WEBHOOK_URL_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url';
+      process.env.BITBUCKET_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
+      delete process.env.BITBUCKET_IPS_SECRET_ARN;
+
+      expect(() => Configuration.loadFromEnvironment()).toThrow(
+        'Configuration error: BITBUCKET_IPS_SECRET_ARN environment variable is required'
+      );
+    });
+
     it('should fail fast when FILTER_MODE is invalid', () => {
       process.env.TEAMS_WEBHOOK_URL_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url';
       process.env.BITBUCKET_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
+      process.env.BITBUCKET_IPS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips';
       process.env.FILTER_MODE = 'invalid_mode';
 
       expect(() => Configuration.loadFromEnvironment()).toThrow(
@@ -85,6 +103,7 @@ describe('Configuration', () => {
         fc.property(
           fc.webUrl(),
           fc.webUrl(),
+          fc.webUrl(),
           fc.stringOf(fc.char(), { minLength: 1, maxLength: 100 }),
           fc.oneof(
             fc.constant('all'),
@@ -92,9 +111,10 @@ describe('Configuration', () => {
             fc.constant('failures'),
             fc.constant('explicit')
           ),
-          (teamsArn: string, bitbucketArn: string, eventFilter: string, filterMode: string) => {
+          (teamsArn: string, bitbucketArn: string, bitbucketIpsArn: string, eventFilter: string, filterMode: string) => {
             process.env.TEAMS_WEBHOOK_URL_SECRET_ARN = teamsArn;
             process.env.BITBUCKET_SECRET_ARN = bitbucketArn;
+            process.env.BITBUCKET_IPS_SECRET_ARN = bitbucketIpsArn;
             process.env.EVENT_FILTER = eventFilter;
             process.env.FILTER_MODE = filterMode;
 
@@ -102,6 +122,7 @@ describe('Configuration', () => {
 
             expect(config.teamsWebhookUrlSecretArn).toBe(teamsArn);
             expect(config.bitbucketSecretArn).toBe(bitbucketArn);
+            expect(config.bitbucketIpsSecretArn).toBe(bitbucketIpsArn);
             expect(config.eventFilter).toBe(eventFilter);
             expect(config.filterMode).toBe(filterMode);
           }
@@ -115,13 +136,17 @@ describe('Configuration', () => {
     // the system SHALL raise an error during initialization
     it('Property 8: Configuration Validation Fails Fast', () => {
       fc.assert(
-        fc.property(fc.boolean(), (missingTeams: boolean) => {
-          if (missingTeams) {
+        fc.property(fc.integer({ min: 0, max: 2 }), (missingIndex: number) => {
+          process.env.TEAMS_WEBHOOK_URL_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url';
+          process.env.BITBUCKET_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
+          process.env.BITBUCKET_IPS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips';
+
+          if (missingIndex === 0) {
             delete process.env.TEAMS_WEBHOOK_URL_SECRET_ARN;
-            process.env.BITBUCKET_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret';
-          } else {
-            process.env.TEAMS_WEBHOOK_URL_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url';
+          } else if (missingIndex === 1) {
             delete process.env.BITBUCKET_SECRET_ARN;
+          } else {
+            delete process.env.BITBUCKET_IPS_SECRET_ARN;
           }
 
           expect(() => Configuration.loadFromEnvironment()).toThrow();
@@ -136,6 +161,7 @@ describe('Configuration', () => {
       const config = new Configuration(
         'arn:aws:secretsmanager:us-east-1:123456789012:secret:teams-url',
         'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret',
+        'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips',
         'repo:push',
         'explicit'
       );
@@ -145,6 +171,9 @@ describe('Configuration', () => {
       );
       expect(config.bitbucketSecretArn).toBe(
         'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-secret'
+      );
+      expect(config.bitbucketIpsSecretArn).toBe(
+        'arn:aws:secretsmanager:us-east-1:123456789012:secret:bitbucket-ips'
       );
       expect(config.eventFilter).toBe('repo:push');
       expect(config.filterMode).toBe('explicit');
