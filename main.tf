@@ -27,7 +27,12 @@ data "archive_file" "lambda_zip" {
 # Build TypeScript to JavaScript and create deployment package
 resource "null_resource" "build_lambda" {
   triggers = {
-    src_hash = filebase64sha256("${path.module}/src/index.ts")
+    # Watch all TypeScript source files for changes
+    src_hash = filebase64sha256("${path.module}/package.json")
+    # Also watch the entire src directory by using a glob pattern
+    src_files = join(",", sort([
+      for f in fileset("${path.module}/src", "**/*.ts") : filebase64sha256("${path.module}/src/${f}")
+    ]))
   }
 
   provisioner "local-exec" {

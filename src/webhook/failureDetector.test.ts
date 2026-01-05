@@ -275,6 +275,31 @@ describe('Failure Detection', () => {
       expect(result?.link).toBe('');
     });
 
+    it('should use commit hash as fallback for branch when branch is missing', () => {
+      const payload: BitbucketCommitStatusPayload = {
+        repository: {
+          name: 'my-repo',
+          full_slug: 'team/my-repo',
+        },
+        commit_status: {
+          state: 'FAILED',
+          key: 'build',
+          url: 'https://ci.example.com/builds/123',
+          description: 'Build failed',
+        },
+        commit: {
+          hash: '9fec847784abb10b2fa567ee63b85bd238955d0e',
+        },
+        actor: {
+          username: 'ci-bot',
+        },
+      };
+
+      const result = detectFailure('repo:commit_status_updated', payload);
+
+      expect(result?.branch).toBe('9fec847');
+    });
+
     it('should return null if required fields are missing', () => {
       const payload = {
         repository: {

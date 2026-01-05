@@ -90,7 +90,8 @@ function detectCommitStatusFailure(payload: Record<string, any>): FailureEvent |
     const reason = typedPayload.commit_status.description || 'Build failed';
     const link = typedPayload.commit_status.url || '';
     const pipelineName = typedPayload.commit_status.key || 'Pipeline';
-    const branch = typedPayload.commit?.branch || 'unknown';
+    // Try to extract branch from commit.branch, fallback to commit.hash if available, then 'unknown'
+    const branch = typedPayload.commit?.branch || typedPayload.commit?.hash?.substring(0, 7) || 'unknown';
 
     return {
       type: 'build_failed',

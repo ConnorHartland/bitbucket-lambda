@@ -39,8 +39,12 @@ export interface BitbucketCommitStatusPayload {
     key: string;
     url: string;
     description: string;
+    name?: string;
+    created_on?: string;
+    updated_on?: string;
   };
   commit?: {
+    hash?: string;
     branch?: string;
   };
   actor: {
