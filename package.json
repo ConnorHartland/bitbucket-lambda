@@ -9,7 +9,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "clean": "rm -rf dist",
-    "prebuild": "npm run clean"
+    "prebuild": "npm run clean",
+    "build-lambda": "bash scripts/build.sh",
+    "build-lambda-quick": "npm run build && npm run test -- --coverage && mkdir -p lambda_build && cp -r dist/* lambda_build/ && cd lambda_build && npm install --production --no-save && cd .. && cd lambda_build && zip -r ../lambda_function.zip . -x '*.git*' '*.DS_Store' 'node_modules/.bin/*' && cd .."
   },
   "keywords": [
     "bitbucket",

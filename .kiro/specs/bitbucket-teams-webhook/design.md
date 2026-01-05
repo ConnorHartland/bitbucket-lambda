@@ -1,12 +1,12 @@
-# Design Document: Failure Notification System
+# Design Document: Bitbucket to Teams Webhook Integration
 
 ## Overview
 
-This document describes the design for a simple failure notification system that captures failure events from Bitbucket webhooks and sends them to Microsoft Teams. The system receives webhook events, validates signatures, detects failures, formats messages, and posts them to Teams. Non-failure events are silently ignored with a 200 response.
+This document describes the design for a Lambda function that receives Bitbucket webhook events and publishes failure notifications to Microsoft Teams. The system validates webhook authenticity using HMAC-SHA256 signatures, checks source IP against Bitbucket's IP ranges, detects failure events (build failures and rejected pull requests), formats them into Teams messages, and posts them to Teams. Non-failure events are silently ignored with a 200 response.
 
 ## Architecture
 
-The system follows a simple linear pipeline:
+The system follows a linear pipeline for webhook processing:
 
 ```
 API Gateway Event
@@ -43,7 +43,7 @@ async function handler(event: APIGatewayProxyEvent, context: Context): Promise<A
 
 **Flow**:
 - Extract event type and signature from headers
-- Check if source IP is whitelisted
+- Check if source IP is whitelisted (if IP restriction enabled)
 - Decode body if base64 encoded
 - Verify signature
 - Load secrets
@@ -62,6 +62,7 @@ async function handler(event: APIGatewayProxyEvent, context: Context): Promise<A
 class Config {
   teamsWebhookUrlSecretArn: string
   bitbucketSecretArn: string
+  ipRestrictionEnabled: boolean
   
   static loadFromEnvironment(): Config
 }
@@ -75,6 +76,7 @@ class Config {
 
 **Interface**:
 ```typescript
+function extractSourceIp(event: APIGatewayProxyEvent): string
 function isIpWhitelisted(sourceIp: string): boolean
 ```
 
@@ -82,7 +84,7 @@ function isIpWhitelisted(sourceIp: string): boolean
 
 ### 4. Signature Verifier (`signature.ts`)
 
-**Responsibility**: Verify webhook signatures
+**Responsibility**: Verify webhook signatures using HMAC-SHA256
 
 **Interface**:
 ```typescript
@@ -91,7 +93,9 @@ function verifySignature(body: string, signature: string, secret: string): boole
 
 **Algorithm**: HMAC-SHA256 with constant-time comparison
 
-### 4. Secret Retriever (`secrets.ts`)
+**Signature Format**: `sha256=<hex_encoded_hmac>`
+
+### 5. Secret Retriever (`secrets.ts`)
 
 **Responsibility**: Retrieve secrets from AWS Secrets Manager
 
@@ -102,7 +106,7 @@ function getSecret(arn: string): Promise<string>
 
 **Caching**: Cache secrets for warm Lambda invocations
 
-### 5. Failure Detector (`failureDetector.ts`)
+### 6. Failure Detector (`failureDetector.ts`)
 
 **Responsibility**: Detect and parse failure events
 
@@ -120,10 +124,10 @@ function detectFailure(eventType: string, payload: any): FailureEvent | null
 ```
 
 **Supported Events**:
-- Pull Request Declined: `pullrequest:rejected`
+- Pull Request Rejected: `pullrequest:rejected`
 - Commit Status Failed: `repo:commit_status_updated` with state='failed'
 
-### 6. Message Formatter (`formatter.ts`)
+### 7. Message Formatter (`formatter.ts`)
 
 **Responsibility**: Format failure events into Teams messages
 
@@ -134,7 +138,7 @@ function formatMessage(failure: FailureEvent): Record<string, any>
 
 **Output**: Simple JSON payload with title, description, and link
 
-### 7. Teams Client (`teamsClient.ts`)
+### 8. Teams Client (`teamsClient.ts`)
 
 **Responsibility**: Post messages to Teams
 
@@ -149,7 +153,7 @@ function postToTeams(message: Record<string, any>, webhookUrl: string): Promise<
 - Timeout: 10 seconds
 - Success: Status 200 or 202
 
-### 8. Logger (`logger.ts`)
+### 9. Logger (`logger.ts`)
 
 **Responsibility**: Structured logging with sanitization
 
@@ -165,7 +169,7 @@ function log(level: string, message: string, context?: Record<string, any>): voi
 ### Failure Event
 ```typescript
 interface FailureEvent {
-  type: string           // 'pr_declined' or 'build_failed'
+  type: string           // 'pr_rejected' or 'build_failed'
   repository: string     // e.g., 'team/repo'
   author: string         // Author name
   reason: string         // Failure reason
@@ -183,37 +187,78 @@ interface FailureEvent {
 }
 ```
 
+### Bitbucket Webhook Payload (repo:commit_status_updated)
+```typescript
+{
+  repository: {
+    name: string
+    full_slug: string
+  }
+  commit_status: {
+    state: 'SUCCESSFUL' | 'FAILED' | 'INPROGRESS'
+    key: string
+    url: string
+    description: string
+  }
+  actor: {
+    username: string
+  }
+}
+```
+
+### Bitbucket Webhook Payload (pullrequest:rejected)
+```typescript
+{
+  repository: {
+    name: string
+    full_slug: string
+  }
+  pullrequest: {
+    id: number
+    title: string
+    links: {
+      html: {
+        href: string
+      }
+    }
+  }
+  actor: {
+    username: string
+  }
+}
+```
+
 ## Correctness Properties
 
 A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.
 
 ### Property 1: IP Whitelist Validation
 *For any* source IP address, the system SHALL correctly identify whether it is in the Bitbucket IP whitelist.
-**Validates: Requirements 2.5.2, 2.5.3**
+**Validates: Requirements 2.2, 2.4**
 
 ### Property 2: Non-Whitelisted IP Returns 200
 *For any* request from a non-whitelisted IP, the system SHALL return a 200 status code and log the rejection.
-**Validates: Requirements 1.2**
+**Validates: Requirements 2.3, 1.6**
 
 ### Property 3: Signature Verification Accuracy
 *For any* webhook body and secret, the computed HMAC-SHA256 signature SHALL match the expected signature for that body and secret.
-**Validates: Requirements 2.1, 2.2**
+**Validates: Requirements 1.4, 2.1**
 
 ### Property 4: Invalid Signature Returns 200
 *For any* request with an invalid signature, the system SHALL return a 200 status code and log the error.
-**Validates: Requirements 1.6**
+**Validates: Requirements 1.5, 1.6**
 
 ### Property 5: Base64 Decoding Round Trip
 *For any* valid payload, if it is base64 encoded in the event, the system SHALL decode it to produce the original payload.
-**Validates: Requirements 1.5**
+**Validates: Requirements 1.3**
 
-### Property 6: PR Declined Detected as Failure
-*For any* pull request declined event, the failure detector SHALL identify it as a failure event.
-**Validates: Requirements 3.1**
+### Property 6: PR Rejected Detected as Failure
+*For any* pull request rejected event, the failure detector SHALL identify it as a failure event.
+**Validates: Requirements 3.2**
 
 ### Property 7: Commit Status Failed Detected as Failure
 *For any* commit status event with state='failed', the failure detector SHALL identify it as a failure event.
-**Validates: Requirements 3.2**
+**Validates: Requirements 3.1**
 
 ### Property 8: Non-Failure Events Ignored
 *For any* non-failure event, the system SHALL return a 200 response without posting to Teams.
@@ -267,16 +312,25 @@ A property is a characteristic or behavior that should hold true across all vali
 *For any* log message containing sensitive information (signatures, tokens, secrets), the system SHALL redact the sensitive data.
 **Validates: Requirements 7.5**
 
+### Property 21: IP Restriction Configurable
+*For any* configuration with IP restriction disabled, the system SHALL skip IP validation and process the webhook.
+**Validates: Requirements 2.5**
+
+### Property 22: Source IP Extraction
+*For any* API Gateway event, the system SHALL correctly extract the source IP from the `X-Forwarded-For` header or event context.
+**Validates: Requirements 2.1**
+
 ## Error Handling
 
 The system implements graceful error handling:
 
 1. **Configuration Errors**: Fail fast during initialization
-2. **Signature Verification Errors**: Log and return 200
-3. **JSON Parsing Errors**: Log and return 200
-4. **AWS Service Errors**: Log and return 200
-5. **Teams API Errors**: Log and return 200
-6. **Non-Failure Events**: Return 200 silently
+2. **IP Validation Errors**: Log and return 200
+3. **Signature Verification Errors**: Log and return 200
+4. **JSON Parsing Errors**: Log and return 200
+5. **AWS Service Errors**: Log and return 200
+6. **Teams API Errors**: Log and return 200
+7. **Non-Failure Events**: Return 200 silently
 
 All errors are logged with context (request ID, event type) for debugging.
 
@@ -290,6 +344,7 @@ Unit tests verify specific examples and edge cases:
 - Message formatting for each failure type
 - Error handling for each error condition
 - Logging and sanitization
+- IP extraction and validation
 
 ### Property-Based Testing
 
@@ -303,6 +358,7 @@ Property-based tests verify universal properties across all inputs:
 - Configuration loading and validation
 - Error responses and logging
 - Log sanitization
+- IP validation and extraction
 
 **Testing Framework**: Jest with fast-check for property-based testing
 **Minimum Iterations**: 100 per property test
@@ -310,10 +366,16 @@ Property-based tests verify universal properties across all inputs:
 
 ## Deployment Considerations
 
-- Node.js 18.x or later runtime
+- Node.js 22.x runtime
 - AWS Lambda execution role with permissions for:
   - Secrets Manager (GetSecretValue)
   - CloudWatch Logs (PutLogEvents)
-- Environment variables for configuration
+- Environment variables for configuration:
+  - `TEAMS_WEBHOOK_URL_SECRET_ARN`: ARN of Teams webhook URL secret
+  - `BITBUCKET_SECRET_ARN`: ARN of Bitbucket webhook secret
+  - `IP_RESTRICTION_ENABLED`: Optional, defaults to 'true'
 - Lambda timeout: 30 seconds
 - Memory: 256 MB
+
+</content>
+</invoke>

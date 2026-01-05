@@ -1,48 +1,77 @@
 /**
- * Webhook Reception Module
- * Handles extraction of headers and body from API Gateway events
- * Requirements: 1.1, 1.2, 1.3, 1.4
+ * Webhook reception and parsing for Bitbucket webhooks
+ * Handles extraction of headers and decoding of request bodies
  */
 
-export interface WebhookEvent {
+import { APIGatewayProxyEvent } from '../types';
+import { Logger } from '../logger';
+
+/**
+ * Represents extracted webhook data
+ */
+export interface WebhookData {
   eventType: string;
   signature: string;
   body: string;
-  headers: Record<string, string>;
 }
 
-export interface APIGatewayProxyEvent {
-  headers: Record<string, string>;
-  body: string | null;
-  isBase64Encoded: boolean;
-  requestContext?: {
-    requestId?: string;
-    identity?: {
-      sourceIp?: string;
+/**
+ * Extract webhook data from API Gateway event
+ * Extracts event type and signature from headers, and decodes body if base64 encoded
+ *
+ * @param event The API Gateway event
+ * @param logger Logger instance for error logging
+ * @returns Extracted webhook data or null if extraction fails
+ */
+export function extractWebhookData(event: APIGatewayProxyEvent, logger: Logger): WebhookData | null {
+  try {
+    // Extract event type from X-Event-Key header
+    const eventType = event.headers['X-Event-Key'] || event.headers['x-event-key'];
+    if (!eventType) {
+      logger.warn('Missing X-Event-Key header');
+      return null;
+    }
+
+    // Extract signature from X-Hub-Signature header
+    const signature = event.headers['X-Hub-Signature'] || event.headers['x-hub-signature'];
+    if (!signature) {
+      logger.warn('Missing X-Hub-Signature header');
+      return null;
+    }
+
+    // Decode body if base64 encoded
+    let body = event.body || '';
+    if (event.isBase64Encoded) {
+      body = Buffer.from(body, 'base64').toString('utf-8');
+    }
+
+    return {
+      eventType,
+      signature,
+      body,
     };
-  };
-}
-
-export function extractWebhookEvent(event: APIGatewayProxyEvent): WebhookEvent {
-  const normalizedHeaders: Record<string, string> = {};
-  Object.entries(event.headers || {}).forEach(([key, value]) => {
-    normalizedHeaders[key.toLowerCase()] = value;
-  });
-
-  const eventType = normalizedHeaders['x-event-key'] || '';
-  if (!eventType) throw new Error('Missing X-Event-Key header');
-
-  const signature = normalizedHeaders['x-hub-signature'] || '';
-  if (!signature) throw new Error('Missing X-Hub-Signature header');
-
-  let body = event.body || '';
-  if (event.isBase64Encoded) {
-    body = Buffer.from(body, 'base64').toString('utf-8');
+  } catch (error) {
+    logger.error('Failed to extract webhook data', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
   }
-
-  return { eventType, signature, body, headers: normalizedHeaders };
 }
 
-export function getRequestId(event: APIGatewayProxyEvent): string {
-  return event.requestContext?.requestId || 'unknown';
+/**
+ * Parse webhook body as JSON
+ *
+ * @param body The webhook body string
+ * @param logger Logger instance for error logging
+ * @returns Parsed JSON object or null if parsing fails
+ */
+export function parseWebhookBody(body: string, logger: Logger): Record<string, any> | null {
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    logger.error('Failed to parse webhook body as JSON', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }

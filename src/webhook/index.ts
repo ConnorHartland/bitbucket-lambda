@@ -1,8 +1,6 @@
 /**
- * Webhook Module - Re-exports for webhook processing
+ * Webhook module exports
  */
 
-export * from './reception';
-export * from './signature';
-export * from './parser';
-export * from './ipRestriction';
+export { extractWebhookData, parseWebhookBody, WebhookData } from './reception';
+export { formatMessage } from './formatter';

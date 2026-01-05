@@ -19,19 +19,19 @@ provider "aws" {
 # Build TypeScript and package Lambda function
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/dist"
+  source_dir  = "${path.module}/lambda_build"
   output_path = "${path.module}/lambda_function.zip"
   depends_on  = [null_resource.build_lambda]
 }
 
-# Build TypeScript to JavaScript
+# Build TypeScript to JavaScript and create deployment package
 resource "null_resource" "build_lambda" {
   triggers = {
     src_hash = filebase64sha256("${path.module}/src/index.ts")
   }
 
   provisioner "local-exec" {
-    command = "cd ${path.module} && npm run build"
+    command = "cd ${path.module} && npm run build-lambda"
   }
 }
 
@@ -86,7 +86,7 @@ resource "aws_lambda_function" "bitbucket_notifier" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "nodejs18.x"
+  runtime          = "nodejs22.x"
   timeout          = var.lambda_timeout
   memory_size      = var.lambda_memory_size
 

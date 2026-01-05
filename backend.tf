@@ -5,19 +5,19 @@ terraform {
   backend "s3" {
     # S3 bucket to store the state file
     bucket = "con-tfstate"
-    
+
     # Path within the bucket to store this project's state
     key = "bitbucket-teams-webhook/terraform.tfstate"
-    
+
     # AWS region where the S3 bucket is located
     region = "us-east-1"
-    
+
     # Encrypt the state file at rest
     encrypt = true
-    
+
     # Optional: Specify AWS profile if not using default
     # profile = "your-aws-profile"
-    
+
     # Optional: Server-side encryption with AWS KMS
     # kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
   }
