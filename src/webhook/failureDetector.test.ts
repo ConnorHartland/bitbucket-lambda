@@ -8,7 +8,7 @@ import * as fc from 'fast-check';
 
 describe('Failure Detection', () => {
   describe('Pull Request Rejection', () => {
-    it('should detect a pull request rejection event', () => {
+    it('should detect a pull request rejection event', async () => {
       const payload: BitbucketPullRequestPayload = {
         repository: {
           name: 'my-repo',
@@ -28,7 +28,7 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('pullrequest:rejected', payload);
+      const result = await detectFailure('pullrequest:rejected', payload);
 
       expect(result).not.toBeNull();
       expect(result?.type).toBe('pr_rejected');
@@ -38,7 +38,7 @@ describe('Failure Detection', () => {
       expect(result?.link).toBe('https://bitbucket.org/team/my-repo/pull-requests/123');
     });
 
-    it('should use repository name if full_slug is not available', () => {
+    it('should use repository name if full_slug is not available', async () => {
       const payload: BitbucketPullRequestPayload = {
         repository: {
           name: 'my-repo',
@@ -58,12 +58,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('pullrequest:rejected', payload);
+      const result = await detectFailure('pullrequest:rejected', payload);
 
       expect(result?.repository).toBe('my-repo');
     });
 
-    it('should handle missing PR title', () => {
+    it('should handle missing PR title', async () => {
       const payload: BitbucketPullRequestPayload = {
         repository: {
           name: 'my-repo',
@@ -83,12 +83,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('pullrequest:rejected', payload);
+      const result = await detectFailure('pullrequest:rejected', payload);
 
       expect(result?.reason).toContain('PR #456');
     });
 
-    it('should handle missing link', () => {
+    it('should handle missing link', async () => {
       const payload: BitbucketPullRequestPayload = {
         repository: {
           name: 'my-repo',
@@ -108,12 +108,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('pullrequest:rejected', payload);
+      const result = await detectFailure('pullrequest:rejected', payload);
 
       expect(result?.link).toBe('');
     });
 
-    it('should return null if required fields are missing', () => {
+    it('should return null if required fields are missing', async () => {
       const payload = {
         repository: {
           name: 'my-repo',
@@ -131,14 +131,14 @@ describe('Failure Detection', () => {
         // Missing actor
       };
 
-      const result = detectFailure('pullrequest:rejected', payload);
+      const result = await detectFailure('pullrequest:rejected', payload);
 
       expect(result).toBeNull();
     });
   });
 
   describe('Commit Status Failure', () => {
-    it('should detect a commit status failure event', () => {
+    it('should detect a commit status failure event', async () => {
       const payload: BitbucketCommitStatusPayload = {
         repository: {
           name: 'my-repo',
@@ -155,7 +155,7 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result).not.toBeNull();
       expect(result?.type).toBe('build_failed');
@@ -165,7 +165,7 @@ describe('Failure Detection', () => {
       expect(result?.link).toBe('https://ci.example.com/builds/123');
     });
 
-    it('should not detect a successful commit status', () => {
+    it('should not detect a successful commit status', async () => {
       const payload: BitbucketCommitStatusPayload = {
         repository: {
           name: 'my-repo',
@@ -182,12 +182,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result).toBeNull();
     });
 
-    it('should not detect an in-progress commit status', () => {
+    it('should not detect an in-progress commit status', async () => {
       const payload: BitbucketCommitStatusPayload = {
         repository: {
           name: 'my-repo',
@@ -204,12 +204,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result).toBeNull();
     });
 
-    it('should use repository name if full_slug is not available', () => {
+    it('should use repository name if full_slug is not available', async () => {
       const payload: BitbucketCommitStatusPayload = {
         repository: {
           name: 'my-repo',
@@ -226,12 +226,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result?.repository).toBe('my-repo');
     });
 
-    it('should use default reason if description is missing', () => {
+    it('should use default reason if description is missing', async () => {
       const payload: BitbucketCommitStatusPayload = {
         repository: {
           name: 'my-repo',
@@ -248,12 +248,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result?.reason).toBe('Build failed');
     });
 
-    it('should handle missing link', () => {
+    it('should handle missing link', async () => {
       const payload: BitbucketCommitStatusPayload = {
         repository: {
           name: 'my-repo',
@@ -270,12 +270,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result?.link).toBe('');
     });
 
-    it('should use commit hash as fallback for branch when branch is missing', () => {
+    it('should use commit hash as fallback for branch when branch is missing', async () => {
       const payload: BitbucketCommitStatusPayload = {
         repository: {
           name: 'my-repo',
@@ -295,12 +295,36 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result?.branch).toBe('9fec847');
     });
 
-    it('should handle real Bitbucket commit status payload structure', () => {
+    it('should extract branch from refname field', async () => {
+      const payload: BitbucketCommitStatusPayload = {
+        repository: {
+          name: 'my-repo',
+          full_slug: 'team/my-repo',
+        },
+        commit_status: {
+          state: 'FAILED',
+          key: 'build',
+          url: 'https://ci.example.com/builds/123',
+          description: 'Build failed',
+          refname: 'refs/heads/feature/my-feature',
+        },
+        actor: {
+          username: 'ci-bot',
+        },
+      };
+
+      const result = await detectFailure('repo:commit_status_updated', payload);
+
+      expect(result).not.toBeNull();
+      expect(result?.branch).toBe('feature/my-feature');
+    });
+
+    it('should handle real Bitbucket commit status payload structure', async () => {
       const payload: BitbucketCommitStatusPayload = {
         actor: {
           username: 'mybuildtool',
@@ -317,10 +341,11 @@ describe('Failure Detection', () => {
           url: 'https://my-build-tool.com/builds/MY-PROJECT/BUILD-792',
           created_on: '2015-11-19T20:37:35.547563+00:00',
           updated_on: '2015-11-20T08:01:16.433108+00:00',
+          refname: 'refs/heads/main',
         },
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result).not.toBeNull();
       expect(result?.type).toBe('build_failed');
@@ -330,9 +355,10 @@ describe('Failure Detection', () => {
       expect(result?.reason).toBe('All tests passed');
       expect(result?.link).toBe('https://my-build-tool.com/builds/MY-PROJECT/BUILD-792');
       expect(result?.status).toBe('FAILED');
+      expect(result?.branch).toBe('main');
     });
 
-    it('should return null if required fields are missing', () => {
+    it('should return null if required fields are missing', async () => {
       const payload = {
         repository: {
           name: 'my-repo',
@@ -347,14 +373,14 @@ describe('Failure Detection', () => {
         // Missing actor
       };
 
-      const result = detectFailure('repo:commit_status_updated', payload);
+      const result = await detectFailure('repo:commit_status_updated', payload);
 
       expect(result).toBeNull();
     });
   });
 
   describe('Non-Failure Events', () => {
-    it('should return null for unknown event types', () => {
+    it('should return null for unknown event types', async () => {
       const payload = {
         repository: {
           name: 'my-repo',
@@ -362,12 +388,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:push', payload);
+      const result = await detectFailure('repo:push', payload);
 
       expect(result).toBeNull();
     });
 
-    it('should return null for pullrequest:created events', () => {
+    it('should return null for pullrequest:created events', async () => {
       const payload: BitbucketPullRequestPayload = {
         repository: {
           name: 'my-repo',
@@ -387,12 +413,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('pullrequest:created', payload);
+      const result = await detectFailure('pullrequest:created', payload);
 
       expect(result).toBeNull();
     });
 
-    it('should return null for pullrequest:updated events', () => {
+    it('should return null for pullrequest:updated events', async () => {
       const payload: BitbucketPullRequestPayload = {
         repository: {
           name: 'my-repo',
@@ -412,12 +438,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('pullrequest:updated', payload);
+      const result = await detectFailure('pullrequest:updated', payload);
 
       expect(result).toBeNull();
     });
 
-    it('should return null for pullrequest:approved events', () => {
+    it('should return null for pullrequest:approved events', async () => {
       const payload: BitbucketPullRequestPayload = {
         repository: {
           name: 'my-repo',
@@ -437,12 +463,12 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('pullrequest:approved', payload);
+      const result = await detectFailure('pullrequest:approved', payload);
 
       expect(result).toBeNull();
     });
 
-    it('should return null for repo:push events', () => {
+    it('should return null for repo:push events', async () => {
       const payload = {
         repository: {
           name: 'my-repo',
@@ -453,7 +479,7 @@ describe('Failure Detection', () => {
         },
       };
 
-      const result = detectFailure('repo:push', payload);
+      const result = await detectFailure('repo:push', payload);
 
       expect(result).toBeNull();
     });
@@ -461,15 +487,15 @@ describe('Failure Detection', () => {
 
   describe('Property Tests', () => {
     // Property 6: PR Rejected Detected as Failure
-    it('should detect all pullrequest:rejected events as failures', () => {
+    it('should detect all pullrequest:rejected events as failures', async () => {
       fc.assert(
-        fc.property(
+        fc.asyncProperty(
           fc.string({ minLength: 1 }),
           fc.integer({ min: 1, max: 100000 }),
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
-          (repoName, prId, prTitle, author, link) => {
+          async (repoName, prId, prTitle, author, link) => {
             const payload: BitbucketPullRequestPayload = {
               repository: {
                 name: repoName,
@@ -489,7 +515,7 @@ describe('Failure Detection', () => {
               },
             };
 
-            const result = detectFailure('pullrequest:rejected', payload);
+            const result = await detectFailure('pullrequest:rejected', payload);
 
             expect(result).not.toBeNull();
             expect(result?.type).toBe('pr_rejected');
@@ -502,14 +528,14 @@ describe('Failure Detection', () => {
     });
 
     // Property 7: Commit Status Failed Detected as Failure
-    it('should detect all repo:commit_status_updated events with state=FAILED as failures', () => {
+    it('should detect all repo:commit_status_updated events with state=FAILED as failures', async () => {
       fc.assert(
-        fc.property(
+        fc.asyncProperty(
           fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
           fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
           fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
           fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
-          (repoName, description, author, link) => {
+          async (repoName, description, author, link) => {
             const payload: BitbucketCommitStatusPayload = {
               repository: {
                 name: repoName,
@@ -526,7 +552,7 @@ describe('Failure Detection', () => {
               },
             };
 
-            const result = detectFailure('repo:commit_status_updated', payload);
+            const result = await detectFailure('repo:commit_status_updated', payload);
 
             expect(result).not.toBeNull();
             expect(result?.type).toBe('build_failed');
@@ -540,14 +566,14 @@ describe('Failure Detection', () => {
     });
 
     // Property 8: Non-Failure Events Ignored
-    it('should return null for non-failure commit status states', () => {
+    it('should return null for non-failure commit status states', async () => {
       fc.assert(
-        fc.property(
+        fc.asyncProperty(
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
-          (repoName, description, author, link) => {
+          async (repoName, description, author, link) => {
             const states = ['SUCCESSFUL', 'INPROGRESS'];
             const state = states[Math.floor(Math.random() * states.length)];
 
@@ -567,7 +593,7 @@ describe('Failure Detection', () => {
               },
             };
 
-            const result = detectFailure('repo:commit_status_updated', payload);
+            const result = await detectFailure('repo:commit_status_updated', payload);
 
             expect(result).toBeNull();
           }
@@ -577,15 +603,15 @@ describe('Failure Detection', () => {
     });
 
     // Property 9: Failure Details Extracted
-    it('should extract all required failure details from PR rejection events', () => {
+    it('should extract all required failure details from PR rejection events', async () => {
       fc.assert(
-        fc.property(
+        fc.asyncProperty(
           fc.string({ minLength: 1 }),
           fc.integer({ min: 1, max: 100000 }),
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
-          (repoName, prId, prTitle, author, link) => {
+          async (repoName, prId, prTitle, author, link) => {
             const payload: BitbucketPullRequestPayload = {
               repository: {
                 name: repoName,
@@ -605,7 +631,7 @@ describe('Failure Detection', () => {
               },
             };
 
-            const result = detectFailure('pullrequest:rejected', payload);
+            const result = await detectFailure('pullrequest:rejected', payload);
 
             expect(result).not.toBeNull();
             expect(result?.repository).toBeTruthy();
@@ -619,14 +645,14 @@ describe('Failure Detection', () => {
     });
 
     // Property 9: Failure Details Extracted (continued)
-    it('should extract all required failure details from commit status failure events', () => {
+    it('should extract all required failure details from commit status failure events', async () => {
       fc.assert(
-        fc.property(
+        fc.asyncProperty(
           fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
           fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
           fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
           fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
-          (repoName, description, author, link) => {
+          async (repoName, description, author, link) => {
             const payload: BitbucketCommitStatusPayload = {
               repository: {
                 name: repoName,
@@ -643,7 +669,7 @@ describe('Failure Detection', () => {
               },
             };
 
-            const result = detectFailure('repo:commit_status_updated', payload);
+            const result = await detectFailure('repo:commit_status_updated', payload);
 
             expect(result).not.toBeNull();
             expect(result?.repository).toBeTruthy();

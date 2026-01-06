@@ -42,6 +42,7 @@ export interface BitbucketCommitStatusPayload {
     name?: string;
     created_on?: string;
     updated_on?: string;
+    refname?: string; // Branch reference (e.g., "refs/heads/main")
   };
   commit?: {
     hash?: string;

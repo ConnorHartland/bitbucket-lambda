@@ -123,7 +123,7 @@ export async function handler(
     }
 
     // Step 7: Detect failure
-    const failure = detectFailure(webhookData.eventType, payload);
+    const failure = await detectFailure(webhookData.eventType, payload);
     if (!failure) {
       // Non-failure event, return 200 silently
       logger.info('Non-failure event received, ignoring');

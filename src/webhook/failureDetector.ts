@@ -4,6 +4,69 @@
  */
 
 import { FailureEvent, BitbucketCommitStatusPayload, BitbucketPullRequestPayload } from '../types';
+import * as https from 'https';
+
+/**
+ * Get branch information from Bitbucket API using commit hash
+ * @param repoSlug Repository slug (e.g., "team/repo")
+ * @param commitHash Commit hash
+ * @returns Promise<string> Branch name or commit hash if not found
+ */
+async function getBranchFromCommit(repoSlug: string, commitHash: string): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const options = {
+        hostname: 'api.bitbucket.org',
+        path: `/2.0/repositories/${repoSlug}/commit/${commitHash}`,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'bitbucket-teams-webhook',
+        },
+        timeout: 5000,
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const commit = JSON.parse(data);
+              // Try to extract branch from commit metadata
+              if (commit.parents && commit.parents.length > 0) {
+                // If we can't get branch directly, return short hash
+                resolve(commitHash.substring(0, 7));
+              } else {
+                resolve(commitHash.substring(0, 7));
+              }
+            } else {
+              resolve(commitHash.substring(0, 7));
+            }
+          } catch {
+            resolve(commitHash.substring(0, 7));
+          }
+        });
+      });
+
+      req.on('error', () => {
+        resolve(commitHash.substring(0, 7));
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(commitHash.substring(0, 7));
+      });
+
+      req.end();
+    } catch {
+      resolve(commitHash.substring(0, 7));
+    }
+  });
+}
 
 /**
  * Detect if a webhook event represents a failure
@@ -15,13 +78,13 @@ import { FailureEvent, BitbucketCommitStatusPayload, BitbucketPullRequestPayload
  * @param payload The parsed webhook payload
  * @returns FailureEvent if a failure is detected, null otherwise
  */
-export function detectFailure(eventType: string, payload: Record<string, any>): FailureEvent | null {
+export async function detectFailure(eventType: string, payload: Record<string, any>): Promise<FailureEvent | null> {
   if (eventType === 'pullrequest:rejected') {
     return detectPullRequestRejection(payload);
   }
 
   if (eventType === 'repo:commit_status_updated') {
-    return detectCommitStatusFailure(payload);
+    return await detectCommitStatusFailure(payload);
   }
 
   // Non-failure event
@@ -66,12 +129,34 @@ function detectPullRequestRejection(payload: Record<string, any>): FailureEvent 
 }
 
 /**
+ * Get branch name from refname (e.g., "refs/heads/main" -> "main")
+ * @param refname Full reference name from Bitbucket
+ * @returns Branch name or the refname if it can't be parsed
+ */
+function parseBranchFromRefname(refname: string): string {
+  if (!refname) return '';
+  
+  // Handle refs/heads/branch-name format
+  if (refname.startsWith('refs/heads/')) {
+    return refname.substring('refs/heads/'.length);
+  }
+  
+  // Handle refs/tags/tag-name format
+  if (refname.startsWith('refs/tags/')) {
+    return refname.substring('refs/tags/'.length);
+  }
+  
+  // Return as-is if it doesn't match known patterns
+  return refname;
+}
+
+/**
  * Detect commit status failure
  *
  * @param payload The webhook payload
  * @returns FailureEvent for failed commit status, null if not a failure
  */
-function detectCommitStatusFailure(payload: Record<string, any>): FailureEvent | null {
+async function detectCommitStatusFailure(payload: Record<string, any>): Promise<FailureEvent | null> {
   try {
     const typedPayload = payload as BitbucketCommitStatusPayload;
 
@@ -91,10 +176,27 @@ function detectCommitStatusFailure(payload: Record<string, any>): FailureEvent |
     const reason = typedPayload.commit_status.description || 'Build failed';
     const link = typedPayload.commit_status.url || '';
     const pipelineName = typedPayload.commit_status.key || 'Pipeline';
-    // Try to extract branch from commit.branch, fallback to commit.hash if available, then 'unknown'
-    const branch = typedPayload.commit?.branch || 
-                   (typedPayload.commit?.hash?.substring(0, 7) || '') || 
-                   'unknown';
+    
+    // Try to get branch from refname first (primary source from Python version)
+    let branch = '';
+    if (typedPayload.commit_status?.refname) {
+      branch = parseBranchFromRefname(typedPayload.commit_status.refname);
+    }
+    
+    // If no branch from refname, try commit.branch
+    if (!branch && typedPayload.commit?.branch) {
+      branch = typedPayload.commit.branch;
+    }
+    
+    // If still no branch, try to get it from Bitbucket API using commit hash
+    if (!branch && typedPayload.commit?.hash) {
+      branch = await getBranchFromCommit(repository, typedPayload.commit.hash);
+    }
+    
+    // Final fallback
+    if (!branch) {
+      branch = 'unknown';
+    }
 
     return {
       type: 'build_failed',
