@@ -16,6 +16,14 @@ export function formatMessage(failure: FailureEvent): Record<string, any> {
   const statusEmoji = failure.status === 'FAILED' ? '❌' : '⚠️';
   const statusColor = failure.status === 'FAILED' ? 'Attention' : 'Warning';
 
+  // Ensure all values are strings and not empty
+  const repository = String(failure.repository || 'unknown').trim() || 'unknown';
+  const branch = String(failure.branch || 'unknown').trim() || 'unknown';
+  const pipelineName = String(failure.pipelineName || 'Pipeline').trim() || 'Pipeline';
+  const author = String(failure.author || 'unknown').trim() || 'unknown';
+  const status = String(failure.status || 'UNKNOWN').trim() || 'UNKNOWN';
+  const reason = String(failure.reason || 'No details available').trim() || 'No details available';
+
   return {
     type: 'AdaptiveCard',
     version: '1.4',
@@ -41,7 +49,7 @@ export function formatMessage(failure: FailureEvent): Record<string, any> {
                   },
                   {
                     type: 'TextBlock',
-                    text: failure.pipelineName || 'Pipeline',
+                    text: pipelineName,
                     weight: 'Default',
                     size: 'Medium',
                     wrap: true,
@@ -76,23 +84,23 @@ export function formatMessage(failure: FailureEvent): Record<string, any> {
             facts: [
               {
                 title: 'Repository',
-                value: failure.repository,
+                value: repository,
               },
               {
                 title: 'Branch',
-                value: failure.branch || 'unknown',
+                value: branch,
               },
               {
                 title: 'Pipeline',
-                value: failure.pipelineName || 'Pipeline',
+                value: pipelineName,
               },
               {
                 title: 'Triggered by',
-                value: failure.author,
+                value: author,
               },
               {
                 title: 'Status',
-                value: failure.status,
+                value: status,
               },
             ],
           },
@@ -104,7 +112,7 @@ export function formatMessage(failure: FailureEvent): Record<string, any> {
         items: [
           {
             type: 'TextBlock',
-            text: `🚨 ${failure.author} - ${failure.reason}`,
+            text: `🚨 ${author} - ${reason}`,
             wrap: true,
             size: 'Default',
             isSubtle: true,
@@ -117,7 +125,7 @@ export function formatMessage(failure: FailureEvent): Record<string, any> {
       {
         type: 'Action.OpenUrl',
         title: '🔍 View Pipeline Logs',
-        url: failure.link,
+        url: failure.link || '#',
       },
     ],
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',

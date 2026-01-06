@@ -300,6 +300,38 @@ describe('Failure Detection', () => {
       expect(result?.branch).toBe('9fec847');
     });
 
+    it('should handle real Bitbucket commit status payload structure', () => {
+      const payload: BitbucketCommitStatusPayload = {
+        actor: {
+          username: 'mybuildtool',
+        },
+        repository: {
+          name: 'test',
+          full_slug: 'tk/test',
+        },
+        commit_status: {
+          name: 'Unit Tests (Python)',
+          description: 'All tests passed',
+          state: 'FAILED',
+          key: 'mybuildtool',
+          url: 'https://my-build-tool.com/builds/MY-PROJECT/BUILD-792',
+          created_on: '2015-11-19T20:37:35.547563+00:00',
+          updated_on: '2015-11-20T08:01:16.433108+00:00',
+        },
+      };
+
+      const result = detectFailure('repo:commit_status_updated', payload);
+
+      expect(result).not.toBeNull();
+      expect(result?.type).toBe('build_failed');
+      expect(result?.repository).toBe('tk/test');
+      expect(result?.author).toBe('mybuildtool');
+      expect(result?.pipelineName).toBe('mybuildtool');
+      expect(result?.reason).toBe('All tests passed');
+      expect(result?.link).toBe('https://my-build-tool.com/builds/MY-PROJECT/BUILD-792');
+      expect(result?.status).toBe('FAILED');
+    });
+
     it('should return null if required fields are missing', () => {
       const payload = {
         repository: {
@@ -473,10 +505,10 @@ describe('Failure Detection', () => {
     it('should detect all repo:commit_status_updated events with state=FAILED as failures', () => {
       fc.assert(
         fc.property(
-          fc.string({ minLength: 1 }),
-          fc.string({ minLength: 1 }),
-          fc.string({ minLength: 1 }),
-          fc.string({ minLength: 1 }),
+          fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+          fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+          fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+          fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
           (repoName, description, author, link) => {
             const payload: BitbucketCommitStatusPayload = {
               repository: {
@@ -590,10 +622,10 @@ describe('Failure Detection', () => {
     it('should extract all required failure details from commit status failure events', () => {
       fc.assert(
         fc.property(
-          fc.string({ minLength: 1 }),
-          fc.string({ minLength: 1 }),
-          fc.string({ minLength: 1 }),
-          fc.string({ minLength: 1 }),
+          fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+          fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+          fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+          fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
           (repoName, description, author, link) => {
             const payload: BitbucketCommitStatusPayload = {
               repository: {

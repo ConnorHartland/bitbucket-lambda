@@ -133,6 +133,15 @@ export async function handler(
       };
     }
 
+    logger.info('Failure detected', {
+      failureType: failure.type,
+      repository: failure.repository,
+      branch: failure.branch,
+      pipelineName: failure.pipelineName,
+      author: failure.author,
+      status: failure.status,
+    });
+
     // Step 8: Format and post to Teams if failure
     const message = formatMessage(failure);
     const posted = await postToTeams(message, teamsWebhookUrl, logger);

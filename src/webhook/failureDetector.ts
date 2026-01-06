@@ -80,18 +80,21 @@ function detectCommitStatusFailure(payload: Record<string, any>): FailureEvent |
       return null;
     }
 
-    // Validate required fields
-    if (!typedPayload.repository?.name || !typedPayload.actor?.username) {
+    // Validate that we have at least repository and actor objects
+    if (!typedPayload.repository || !typedPayload.actor) {
       return null;
     }
 
-    const repository = typedPayload.repository.full_slug || typedPayload.repository.name;
-    const author = typedPayload.actor.username;
+    // Extract fields with fallbacks
+    const repository = typedPayload.repository.full_slug || typedPayload.repository.name || 'unknown';
+    const author = typedPayload.actor.username || 'unknown';
     const reason = typedPayload.commit_status.description || 'Build failed';
     const link = typedPayload.commit_status.url || '';
     const pipelineName = typedPayload.commit_status.key || 'Pipeline';
     // Try to extract branch from commit.branch, fallback to commit.hash if available, then 'unknown'
-    const branch = typedPayload.commit?.branch || typedPayload.commit?.hash?.substring(0, 7) || 'unknown';
+    const branch = typedPayload.commit?.branch || 
+                   (typedPayload.commit?.hash?.substring(0, 7) || '') || 
+                   'unknown';
 
     return {
       type: 'build_failed',
