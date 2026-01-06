@@ -273,10 +273,19 @@ describe('Teams Client', () => {
       const payload = mockRequest.write.mock.calls[0][0];
       const parsedPayload = JSON.parse(payload);
 
-      expect(parsedPayload.title).toBe(message.title);
-      expect(parsedPayload.description).toBe(message.description);
-      expect(parsedPayload.link).toBe(message.link);
-      expect(parsedPayload.color).toBe(message.color);
+      // Verify the payload is wrapped in Teams Workflows format
+      expect(parsedPayload.type).toBe('message');
+      expect(parsedPayload.attachments).toBeDefined();
+      expect(parsedPayload.attachments[0].contentType).toBe('application/vnd.microsoft.card.adaptive');
+      
+      // Verify flat fields are included for Power Automate expressions
+      expect(parsedPayload.repository).toBeDefined();
+      expect(parsedPayload.branch).toBeDefined();
+      expect(parsedPayload.build_name).toBeDefined();
+      expect(parsedPayload.author).toBeDefined();
+      expect(parsedPayload.build_status).toBeDefined();
+      expect(parsedPayload.description).toBeDefined();
+      expect(parsedPayload.url).toBeDefined();
     });
 
     it('should set correct headers', async () => {

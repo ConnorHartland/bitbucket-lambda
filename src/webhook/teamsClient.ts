@@ -26,8 +26,24 @@ export async function postToTeams(
       // Parse the webhook URL
       const url = new URL(webhookUrl);
 
-      // Prepare the payload - send the Adaptive Card directly
-      const payload = JSON.stringify(message);
+      // Convert the Adaptive Card to the flat structure expected by Teams Workflows
+      const payload = JSON.stringify({
+        type: 'message',
+        attachments: [
+          {
+            contentType: 'application/vnd.microsoft.card.adaptive',
+            content: message,
+          },
+        ],
+        // Also include flat fields for Teams Workflows Power Automate expressions
+        repository: message.body?.[1]?.items?.[0]?.facts?.find((f: any) => f.title === 'Repository')?.value || 'unknown',
+        branch: message.body?.[1]?.items?.[0]?.facts?.find((f: any) => f.title === 'Branch')?.value || 'unknown',
+        build_name: message.body?.[1]?.items?.[0]?.facts?.find((f: any) => f.title === 'Pipeline')?.value || 'Pipeline',
+        author: message.body?.[1]?.items?.[0]?.facts?.find((f: any) => f.title === 'Triggered by')?.value || 'unknown',
+        build_status: message.body?.[1]?.items?.[0]?.facts?.find((f: any) => f.title === 'Status')?.value || 'UNKNOWN',
+        description: message.body?.[2]?.items?.[0]?.text || 'No details available',
+        url: message.actions?.[0]?.url || '',
+      });
 
       // Prepare request options
       const options = {
