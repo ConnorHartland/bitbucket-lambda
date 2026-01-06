@@ -1,0 +1,1 @@
+{"version":3,"file":"teamsClient.d.ts","sourceRoot":"","sources":["../../src/webhook/teamsClient.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAGH,OAAO,EAAE,MAAM,EAAE,MAAM,WAAW,CAAC;AAEnC;;;;;;;;;GASG;AACH,wBAAsB,WAAW,CAC/B,OAAO,EAAE,MAAM,CAAC,MAAM,EAAE,GAAG,CAAC,EAC5B,UAAU,EAAE,MAAM,EAClB,MAAM,EAAE,MAAM,GACb,OAAO,CAAC,OAAO,CAAC,CA2FlB"}

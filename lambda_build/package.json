@@ -1,0 +1,37 @@
+{
+  "name": "bitbucket-teams-webhook",
+  "version": "2.0.0",
+  "description": "Bitbucket Teams Webhook Lambda function - Node.js migration",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "build-lambda": "bash scripts/build.sh",
+    "build-lambda-quick": "npm run build && npm run test -- --coverage && mkdir -p lambda_build && cp -r dist/* lambda_build/ && cd lambda_build && npm install --production --no-save && cd .. && cd lambda_build && zip -r ../lambda_function.zip . -x '*.git*' '*.DS_Store' 'node_modules/.bin/*' && cd .."
+  },
+  "keywords": [
+    "bitbucket",
+    "teams",
+    "webhook",
+    "lambda"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.500.0",
+    "@aws-sdk/client-cloudwatch": "^3.500.0",
+    "ipaddr.js": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.8",
+    "@types/node": "^20.10.0",
+    "fast-check": "^3.14.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.3.3"
+  }
+}
