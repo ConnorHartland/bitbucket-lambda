@@ -141,7 +141,6 @@ describe('IP Whitelist Validation', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 1: IP Whitelist Validation
     it('should correctly identify whitelisted IPs for any valid Bitbucket IP', () => {
       fc.assert(
         fc.property(
@@ -162,7 +161,6 @@ describe('IP Whitelist Validation', () => {
       );
     });
 
-    // Property 2: Non-Whitelisted IP Returns 200
     it('should reject non-Bitbucket IPs consistently', () => {
       fc.assert(
         fc.property(
@@ -190,7 +188,6 @@ describe('IP Whitelist Validation', () => {
       );
     });
 
-    // Property 22: Source IP Extraction
     it('should extract source IP from event for any valid event structure', () => {
       fc.assert(
         fc.property(fc.ipV4(), (ip) => {

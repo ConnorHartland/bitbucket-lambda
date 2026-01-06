@@ -346,8 +346,6 @@ describe('Teams Client', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 12: Teams Posting Success
-    // **Validates: Requirements 5.1, 5.2**
     it('should successfully post any valid failure message to Teams', async () => {
       await fc.assert(
         fc.asyncProperty(
@@ -390,8 +388,6 @@ describe('Teams Client', () => {
       );
     });
 
-    // Property 13: Teams Posting Failure Logged
-    // **Validates: Requirements 5.3**
     it('should log errors for all Teams API failures', async () => {
       await fc.assert(
         fc.asyncProperty(

@@ -174,8 +174,6 @@ describe('Secret Retrieval', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 16: Secret Retrieval from AWS
-    // **Validates: Requirements 6.3, 6.4**
     it('should retrieve any valid secret from AWS Secrets Manager', async () => {
       await fc.assert(
         fc.asyncProperty(fc.stringMatching(/^[a-zA-Z0-9]+$/), async (secretValue) => {
@@ -202,8 +200,6 @@ describe('Secret Retrieval', () => {
       );
     });
 
-    // Property 16: Secret Retrieval from AWS (caching behavior)
-    // **Validates: Requirements 6.3, 6.4**
     it('should cache secrets and reduce AWS calls for repeated retrievals', async () => {
       await fc.assert(
         fc.asyncProperty(fc.stringMatching(/^[a-zA-Z0-9]+$/), async (secretValue) => {

@@ -169,7 +169,6 @@ describe('Message Formatting', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 10: Failure Message Contains Required Fields
     it('should include all required fields in formatted message', () => {
       fc.assert(
         fc.property(
@@ -204,7 +203,6 @@ describe('Message Formatting', () => {
       );
     });
 
-    // Property 11: Failure Messages Use Red Color
     it('should use appropriate colors for all failure types', () => {
       fc.assert(
         fc.property(

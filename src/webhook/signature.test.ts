@@ -152,7 +152,6 @@ describe('Signature Verification', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 3: Signature Verification Accuracy
     it('should correctly verify computed signatures for any body and secret', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (body, secret) => {
@@ -170,7 +169,6 @@ describe('Signature Verification', () => {
       );
     });
 
-    // Property 4: Invalid Signature Returns False
     it('should reject invalid signatures for any body and secret', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (body, secret) => {
@@ -196,7 +194,6 @@ describe('Signature Verification', () => {
       );
     });
 
-    // Property 3: Signature Verification Accuracy (continued)
     it('should reject signatures with wrong secret for any body', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), fc.string(), (body, secret, wrongSecret) => {
@@ -219,7 +216,6 @@ describe('Signature Verification', () => {
       );
     });
 
-    // Property 3: Signature Verification Accuracy (continued)
     it('should reject signatures with wrong body for any secret', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), fc.string(), (body, wrongBody, secret) => {

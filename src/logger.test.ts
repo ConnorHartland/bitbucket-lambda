@@ -255,7 +255,6 @@ describe('Logger', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 17: JSON Error Logged
     it('should log JSON parsing errors with request ID and event type', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (requestId, eventType) => {
@@ -273,7 +272,6 @@ describe('Logger', () => {
       );
     });
 
-    // Property 18: AWS Error Logged
     it('should log AWS service errors with request ID and event type', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (requestId, eventType) => {
@@ -291,7 +289,6 @@ describe('Logger', () => {
       );
     });
 
-    // Property 19: Teams API Error Logged
     it('should log Teams API errors with request ID and event type', () => {
       fc.assert(
         fc.property(fc.string(), fc.string(), (requestId, eventType) => {
@@ -309,7 +306,6 @@ describe('Logger', () => {
       );
     });
 
-    // Property 20: Log Sanitization
     it('should sanitize all sensitive information in logs', () => {
       fc.assert(
         fc.property(

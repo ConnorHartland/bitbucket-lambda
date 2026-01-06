@@ -86,7 +86,6 @@ describe('ConfigManager', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 14: Configuration Loading from Environment
     it('should load configuration correctly for any valid ARN strings', () => {
       fc.assert(
         fc.property(fc.webUrl(), fc.webUrl(), (teamsArn, bitbucketArn) => {
@@ -103,7 +102,6 @@ describe('ConfigManager', () => {
       );
     });
 
-    // Property 15: Configuration Validation Fails Fast
     it('should fail fast when required configuration is missing', () => {
       fc.assert(
         fc.property(fc.boolean(), (missingTeams) => {

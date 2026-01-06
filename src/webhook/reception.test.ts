@@ -206,7 +206,6 @@ describe('Webhook Reception', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 5: Base64 Decoding Round Trip
     it('should decode base64 encoded body to original payload', () => {
       fc.assert(
         fc.property(fc.json(), (payload) => {

@@ -486,7 +486,6 @@ describe('Failure Detection', () => {
   });
 
   describe('Property Tests', () => {
-    // Property 6: PR Rejected Detected as Failure
     it('should detect all pullrequest:rejected events as failures', async () => {
       fc.assert(
         fc.asyncProperty(
@@ -527,7 +526,6 @@ describe('Failure Detection', () => {
       );
     });
 
-    // Property 7: Commit Status Failed Detected as Failure
     it('should detect all repo:commit_status_updated events with state=FAILED as failures', async () => {
       fc.assert(
         fc.asyncProperty(
@@ -565,7 +563,6 @@ describe('Failure Detection', () => {
       );
     });
 
-    // Property 8: Non-Failure Events Ignored
     it('should return null for non-failure commit status states', async () => {
       fc.assert(
         fc.asyncProperty(
@@ -602,7 +599,6 @@ describe('Failure Detection', () => {
       );
     });
 
-    // Property 9: Failure Details Extracted
     it('should extract all required failure details from PR rejection events', async () => {
       fc.assert(
         fc.asyncProperty(
@@ -644,7 +640,6 @@ describe('Failure Detection', () => {
       );
     });
 
-    // Property 9: Failure Details Extracted (continued)
     it('should extract all required failure details from commit status failure events', async () => {
       fc.assert(
         fc.asyncProperty(
